@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OSM Editor</title>
+    <link rel="stylesheet" href="vendor/leaflet194/leaflet.css" />
+    <script src="vendor/leaflet194/leaflet.js"></script>
+    <script defer src="editor.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 1em;
+            font-family: Noto Sans, Arial, Helvetica, sans-serif;
+        }
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+        .controls {
+            margin-top: 10px;
+        }
+        textarea {
+            width: 100%;
+            height: 80px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Look up Address in OSM</h1>
+    <div id="instructions">To get started, select an address on a web page, then right click and choose "Look up address in OSM".</div>
+    <div id="searching" style="display:none">Querying Nominatim...</div>
+    <div id="response" style="display:none">
+        <div id="map"></div>
+        <!--<div class="controls">
+            <label for="tags">Tags (key=value, one per line):</label>
+            <textarea id="tags"></textarea>
+            <button id="submit">Submit to OpenStreetMap</button>
+        </div>-->
+
+        <div id="edit_info" class="">
+            <h3>See an issue?</h3>
+            <button id="edit_last_in_id">Edit in iD</button>
+        </div>
+
+        <h3>Nominatim Response</h3>
+        <textarea id="full_nominatim_response"></textarea>
+    </div>
+
+</body>
+</html>

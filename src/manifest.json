@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "Browsm",
+  "version": "1.0",
+  "sidebar_action": {
+    "default_title": "Browsm",
+    "default_panel": "editor.html",
+    "default_icon": "icons/browsm_64.png"
+  },
+  "permissions": ["contextMenus",
+    "notifications",
+    "storage",
+    "activeTab",
+    "scripting",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "header-rules",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "host_permissions": ["<all_urls>","https://www.openstreetmap.org/*"],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["oauth-callback.html"],
+      "matches": ["https://www.openstreetmap.org/*"]
+    }
+  ],
+  "options_page": "options.html",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "browsm@nicksantos.com"
+    }
+  },
+  "action": {
+    "default_popup": "editor.html",
+    "default_icon": {
+      "16": "icons/icon-inactive_1024.png",
+      "48": "icons/icon-inactive_1024.png",
+      "128": "icons/icon-inactive_1024.png"
+    }
+  },
+  "icons": {
+    "32": "icons/browsm_32.png",
+    "48": "icons/browsm_48.png",
+    "64": "icons/browsm_64.png"
+  }
+}
