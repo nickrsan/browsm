@@ -6,6 +6,7 @@
 - [] Make GitHub Action to build release branch
 - [] Make GitHub Action to build a beta branch for test releases
 - [] Document how to develop the extension
+- [] Initial accessibility checks
 - [] Issue template?
 
 # Features
@@ -25,11 +26,13 @@
   - A phone number that is found on the current page - missing phone, incorrect phone, correct phone
   - A web address that matches the current page - same categories as above
   - A name that's a text string found somewhere in the current page
+- [] Logic to find items in the page for background review. Could include regex, but also aria roles or intent links (e.g. tel:)
 - [] Some kind of interaction chart for a product plan:
   - e.g. User chooses context menu item, but pane is already open, then ____
   - User chooses context menu item when pane is closed, then _____
   - etc
 - [] Option to automatically close sidebar pane when opening editor
+- [] Thorough Accessibility checks in UX
 
 # Tests
 -[] Unit tests
