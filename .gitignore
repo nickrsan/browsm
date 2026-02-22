@@ -1,5 +1,9 @@
 /tmp
 /out-tsc
+.output/*
+.idea/*
+.vscode/*
+.wxt/*
 
 /node_modules
 npm-debug.log*
