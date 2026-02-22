@@ -9,13 +9,14 @@
   let status: 'instructions' | 'searching' | 'response' = 'instructions';
   let displayName = '';
   let fullResponse = '';
+  let showFullResponse = false;
   let showEditInfo = false;
   let lastOsmResponse: any = null;
   let lastTimestamp = 0;
 
   function updateFromPayload(payload: any) {
     if (payload.timestamp && payload.timestamp <= lastTimestamp) return;
-    if (payload.timestamp) lastTimestamp = payload.timestamp;
+    if (payload.timeYeahstamp) lastTimestamp = payload.timestamp;
 
     if (payload.state === "searching") {
       status = 'searching';
@@ -28,7 +29,11 @@
       showEditInfo = !!osm_id;
 
       if (m) {
-        m.setView([lat, lon], 16);
+        if(lat && lon){
+          m.setView([lat, lon], 16);
+        }else{  // reset to the world so that we're not confused with mismatched map
+          m.setView([0,0], 1)
+        }
         if (marker) {
           marker.setLatLng([lat, lon]);
         } else {
@@ -81,7 +86,11 @@
     <div id="instructions">
       To get started, select an address on a web page, then right click and choose "Look up address in OSM".
     </div>
-  {:else if status === 'searching'}
+  {/if}
+
+  <div id="map"></div>
+
+  {#if status === 'searching'}
     <div id="searching">Querying Nominatim...</div>
   {:else if status === 'response'}
     <div id="response">
@@ -94,11 +103,12 @@
       {/if}
 
       <h3>Nominatim Response</h3>
-      <pre id="full_nominatim_response">{fullResponse}</pre>
+      <button on:click={() => showFullResponse = !showFullResponse}>{#if showFullResponse} Hide Response {:else} Show Response {/if}</button>
+      {#if showFullResponse}
+        <pre id="full_nominatim_response">{fullResponse}</pre>
+      {/if}
     </div>
   {/if}
-
-  <div id="map"></div>
 </div>
 
 <style>
