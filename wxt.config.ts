@@ -6,7 +6,7 @@ export default defineConfig({
   modules: ['@wxt-dev/module-svelte'],
   manifest: {
     name: "Browsm",
-    version: "1.0",
+    version: "0.1.0",
     permissions: [
       "contextMenus",
       "notifications",
@@ -46,6 +46,11 @@ export default defineConfig({
     },
     side_panel: {
       default_path: "sidebar.html"
-    }
+    },
+    icons: {
+      32: "icon/browsm_32.png",
+      48: "icon/browsm_48.png",
+      64: "icon/browsm_64.png"
+    },
   }
 });

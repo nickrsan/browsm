@@ -5,7 +5,7 @@
   import { messaging } from '@/lib/messaging';
 
   let m: L.Map;
-  let marker: L.Marker;
+  let marker: L.Icon;
   let status: 'instructions' | 'searching' | 'response' = 'instructions';
   let displayName = '';
   let fullResponse = '';

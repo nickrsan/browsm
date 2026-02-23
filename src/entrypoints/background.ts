@@ -23,7 +23,7 @@ export default defineBackground(() => {
     browser.contextMenus.create({
       id: "check-address",
       title: "Check Address in OSM",
-      contexts: ["selection"]
+      contexts: ["selection"],
     });
   });
 
@@ -56,7 +56,7 @@ export default defineBackground(() => {
 
       browser.notifications.create({
         type: "basic",
-        iconUrl: "/icon/128.png",
+        iconUrl: "/icon/browsm_64.png",
         title: "Validating Address...",
         message: `Checking if "${selectedText}" has already been added to OpenStreetMap.`
       });
@@ -68,7 +68,7 @@ export default defineBackground(() => {
         
         browser.notifications.create({
           type: "basic",
-          iconUrl: "/icon/128.png",
+          iconUrl: "/icon/browsm_64.png",
           title: "Address Found!",
           message: `Valid address detected: ${display_name}\nCoordinates: ${lat}, ${lon}`
         });
@@ -97,7 +97,7 @@ export default defineBackground(() => {
       } else {
         browser.notifications.create({
           type: "basic",
-          iconUrl: "/icon/128.png",
+          iconUrl: "/icon/browsm_64.png",
           title: "Address Not Found!",
           message: `Could not find the address: "${selectedText}".`
         });
@@ -110,14 +110,14 @@ export default defineBackground(() => {
     let iconPath;
     switch (state) {
       case "active":
-        iconPath = "/icon/128.png"; // Should use success icon if available
+        iconPath = "/icon/browsm_64.png"; // Should use success icon if available
         break;
       case "inactive":
       case "no-address":
-        iconPath = "/icon/128.png"; // Should use inactive icon
+        iconPath = "/icon/browsm_64.png"; // Should use inactive icon
         break;
       default:
-        iconPath = "/icon/128.png";
+        iconPath = "/icon/browsm_64.png";
         break;
     }
     browser.action.setIcon({ path: iconPath });
