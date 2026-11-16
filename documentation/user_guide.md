@@ -28,8 +28,10 @@ Welcome to **Browsm**, the in-browser OpenStreetMap assistant for discovering, v
 
 ## 3. Reviewing & Editing in OpenStreetMap
 
-### Sidebar Place Inspector
-- **Map View**: Displays an interactive map centered on the geocoded location with a pin marker.
+### Sidebar Place Inspector & Vector Map
+- **Vector Map View**: Powered by MapLibre GL and OpenFreeMap vector tiles, featuring crisp text rendering, fractional zooming, and dark mode synchronization.
+- **Marker Hierarchy**: Color-coded map pins distinguish matched live OSM entities (green), webpage sources (blue), nearby elements (orange), and custom pins (purple).
+- **Building & Structure Polygons**: Building perimeters with POI tags are rendered with semi-transparent polygon fills and outline strokes.
 - **Nominatim Response**: Click **"Show Response"** to inspect the structured geocoding details, place rank, category, and OpenStreetMap element ID.
 - **Edit in iD**: If an OSM element exists (`node`, `way`, or `relation`), click **"Edit in iD"** to open the official OpenStreetMap web editor directly focused on the element for instant updates.
 

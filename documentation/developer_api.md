@@ -12,14 +12,17 @@ Browsm is built on the [WXT](https://wxt.dev) framework and [Svelte 5](https://s
 ```
 browsm/
 ├── src/
+│   ├── components/
+│   │   └── MapLibreMap.svelte # Encapsulated MapLibre vector map component
 │   ├── entrypoints/
 │   │   ├── background.ts      # Unified background service worker
 │   │   ├── popup/             # Action popup UI
-│   │   └── sidebar/           # Sidebar workspace & Leaflet map
+│   │   └── sidebar/           # Sidebar workspace & Vector Map
 │   ├── lib/
 │   │   └── messaging.ts       # Type-safe extension messaging hub
 │   └── types/                 # Centralized TypeScript definitions
 │       ├── osm.ts             # OSM elements & Nominatim responses
+│       ├── map.ts             # Vector map models & OpenFreeMap styles
 │       ├── schema.ts          # Schema.org place representations
 │       ├── diff.ts            # Tag diffing & match session state
 │       ├── messaging.ts       # Payload definitions

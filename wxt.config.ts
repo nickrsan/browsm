@@ -17,6 +17,7 @@ export default defineConfig({
     host_permissions: [
       "https://*.openstreetmap.org/*",
       "https://nominatim.openstreetmap.org/*",
+      "https://tiles.openfreemap.org/*",
     ],
     browser_specific_settings: {
       gecko: {

@@ -1,17 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import L from 'leaflet';
-  import 'leaflet/dist/leaflet.css';
+  import MapLibreMap from '@/components/MapLibreMap.svelte';
   import { messaging } from '@/lib/messaging';
   import type { NominatimResult } from '@/types/osm';
   import type { EditorWorkflowState } from '@/types/messaging';
+  import type { MapMarker, MapStructure } from '@/types/map';
 
   /**
-   * DOM element reference for the Leaflet map container
+   * Reactive state for vector map coordinates, zoom, markers, and building structures
    */
-  let mapContainer = $state<HTMLDivElement | null>(null);
-  let mapInstance = $state<L.Map | null>(null);
-  let currentMarker = $state<L.Marker | null>(null);
+  let mapCenter = $state<[number, number]>([0, 0]); // [lon, lat]
+  let mapZoom = $state<number>(1);
+  let markers = $state<MapMarker[]>([]);
+  let structures = $state<MapStructure[]>([]);
 
   /**
    * Reactive state for sidebar workflow and place details
@@ -25,7 +26,7 @@
   let lastTimestamp = $state<number>(0);
 
   /**
-   * Updates sidebar reactive state and centers the Leaflet map from received payloads.
+   * Updates sidebar reactive state and centers the vector map from received payloads.
    */
   function updateFromPayload(payload: {
     state?: EditorWorkflowState;
@@ -58,33 +59,30 @@
         : 'No usable response from Nominatim, or an error occurred.';
       showEditInfo = Boolean(payload.osm_id);
 
-      if (mapInstance && parsedLat !== undefined && parsedLon !== undefined && !Number.isNaN(parsedLat) && !Number.isNaN(parsedLon)) {
-        mapInstance.setView([parsedLat, parsedLon], 16);
-        if (currentMarker) {
-          currentMarker.setLatLng([parsedLat, parsedLon]);
-        } else {
-          currentMarker = L.marker([parsedLat, parsedLon]).addTo(mapInstance);
-        }
-        currentMarker.bindPopup(name).openPopup();
-      } else if (mapInstance) {
-        mapInstance.setView([0, 0], 1);
+      if (parsedLat !== undefined && parsedLon !== undefined && !Number.isNaN(parsedLat) && !Number.isNaN(parsedLon)) {
+        mapCenter = [parsedLon, parsedLat];
+        mapZoom = 16;
+        markers = [
+          {
+            id: payload.osm_id || 'lookup-result',
+            lat: parsedLat,
+            lon: parsedLon,
+            title: name,
+            category: 'matched',
+          },
+        ];
+      } else {
+        mapCenter = [0, 0];
+        mapZoom = 1;
+        markers = [];
       }
     }
   }
 
   /**
-   * Initializes the Leaflet map and registers messaging listeners with proper teardown.
+   * Registers messaging listeners and initializes storage state with proper teardown.
    */
   $effect(() => {
-    if (!mapContainer) return;
-
-    const initializedMap = L.map(mapContainer).setView([0, 0], 1);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(initializedMap);
-
-    mapInstance = initializedMap;
-
     // Load initial state from local storage if available
     browser.storage.local.get('lookupState').then((storage) => {
       if (storage?.lookupState) {
@@ -105,9 +103,6 @@
     return () => {
       unwatchUpdateEditor();
       unwatchAdjustMap();
-      initializedMap.remove();
-      mapInstance = null;
-      currentMarker = null;
     };
   });
 
@@ -132,7 +127,15 @@
     </div>
   {/if}
 
-  <div id="map" bind:this={mapContainer}></div>
+  <div class="map-section">
+    <MapLibreMap
+      center={mapCenter}
+      zoom={mapZoom}
+      {markers}
+      {structures}
+      height="400px"
+    />
+  </div>
 
   {#if status === 'searching'}
     <div id="searching">Querying Nominatim...</div>
@@ -161,9 +164,7 @@
     padding: 1em;
     font-family: 'Noto Sans', Arial, Helvetica, sans-serif;
   }
-  #map {
-    height: 400px;
-    width: 100%;
+  .map-section {
     margin-bottom: 1em;
   }
   pre {

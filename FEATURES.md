@@ -19,3 +19,12 @@ This registry tracks existing and planned features of the Browsm extension to en
 10. **Strict TypeScript Typing**: Centralized type definitions for OSM entities (`OsmElement`, `OsmChangeset`), Nominatim responses (`NominatimResult`), Schema.org data (`SchemaOrgPlace`), Tag diffs (`TagDiffItem`), and messaging contracts.
 11. **Vitest Unit & Component Testing Suite**: Automated testing suite with `vitest`, `jsdom`, and `@testing-library/svelte` covering messaging contracts, storage synchronization, and component logic.
 12. **Mozilla Add-on Policies (2026) Compliance**: Least-privilege manifest permissions, strict HTTPS transport, self-contained dependencies without remote code execution, and no Content Security Policy relaxation.
+
+## Phase 2 Features (MapLibre GL JS & OpenFreeMap Vector Integration)
+
+13. **MapLibre GL Vector Map Engine**: Replaced raster Leaflet tiles with GPU-accelerated MapLibre GL JS vector rendering, enabling smooth fractional zooming, high-DPI clarity, and pitch/rotation capabilities.
+14. **OpenFreeMap Vector Tile Integration**: Built-in support for OpenFreeMap vector styles (`liberty`, `bright`, `positron`, `dark`) hosted on global CDN with zero API key configuration or rate limit throttling.
+15. **Automatic Dark Mode Synchronization**: Vector map style dynamically synchronizes with user's system and browser color scheme preferences (`prefers-color-scheme`).
+16. **Structure & Building Polygon Overlays**: Interactive GeoJSON polygon rendering for building perimeters and structures (`way` geometry) with hover effects and selection highlighting.
+17. **Semantic POI Marker Hierarchy**: Color-coded SVG marker pins distinguishing matched live OSM entities (green), webpage sources (blue), nearby elements (orange), and custom pins (purple).
+18. **Responsive Map Lifecycle**: Encapsulated Svelte 5 `$effect` lifecycle with automatic `ResizeObserver` viewport tracking and comprehensive WebGL canvas memory cleanup.
