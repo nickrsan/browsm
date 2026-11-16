@@ -213,16 +213,21 @@ export function parseOsmBboxXml(xmlString: string): OsmElement[] {
 /**
  * Fetches and parses all OSM elements in a geographic bounding box via OSM API 0.6.
  */
-export async function fetchOsmElementsInBbox(bbox: {
-  minLon: number;
-  minLat: number;
-  maxLon: number;
-  maxLat: number;
-}): Promise<OsmElement[]> {
-  const url = `${OSM_API_BASE}/map?bbox=${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
+export async function fetchOsmElementsInBbox(
+  bbox: {
+    minLon: number;
+    minLat: number;
+    maxLon: number;
+    maxLat: number;
+  },
+  baseUrl: string = OSM_API_BASE,
+  customFetch: typeof fetch = fetch
+): Promise<OsmElement[]> {
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+  const url = `${cleanBaseUrl}/map?bbox=${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
 
   try {
-    const response = await fetch(url, {
+    const response = await customFetch(url, {
       headers: {
         'User-Agent': 'Browsm/0.1.0 (OpenStreetMap POI Editor Extension)',
         'Accept': 'application/xml',

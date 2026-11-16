@@ -68,7 +68,36 @@ If you discover a missing business, outdated phone number, or incorrect opening 
 
 ---
 
-## 5. Tips & Best Practices
+## 5. Multi-Endpoint & Developer Mode Settings
+
+Browsm includes a flexible configuration system allowing contributors and developers to switch between different OpenStreetMap-compatible backends and test mapping workflows safely.
+
+### Accessing Settings
+- **Quick Settings Modal**: Click the gear icon (`⚙️`) in the top right of the Sidebar or Popup header for instant environment switching.
+- **Full Settings Dashboard**: Right-click the extension icon and select **"Options"**, or click **"Open Full Settings Dashboard ↗"** from the Quick Settings modal.
+
+### Granular Developer Mode Routing
+Developer Mode allows you to test features and edits without affecting the live OpenStreetMap database:
+1. 🟢 **Disabled (Live Production)**: Reads and writes interact directly with the live OpenStreetMap database. Changesets directly update live map features.
+2. 🟠 **Writes Only (Safe Sandbox Edits - Recommended for Testing)**:
+   - **Reads**: Query live OpenStreetMap production for real-world POIs and existing tags.
+   - **Writes**: Route all test changesets, node creations, and notes safely to the official OSM Dev API sandbox (`master.apis.dev.openstreetmap.org`).
+3. 🔴 **Full Dev Sandbox (Reads & Writes)**: Both reads and writes route exclusively to the OSM Dev API sandbox.
+
+### Target Backend Environments
+- **OpenStreetMap (Live)**: The standard production OpenStreetMap database (`api.openstreetmap.org`).
+- **OSM Dev Server (Sandbox)**: The official OpenStreetMap test sandbox (`master.apis.dev.openstreetmap.org`).
+- **OpenHistoricalMap (OHM)**: Historical mapping platform powered by OpenStreetMap API 0.6 and OAuth 2.0 (`openhistoricalmap.org`).
+- **Custom Instance**: Connect to local development Rails ports (e.g. `http://127.0.0.1:3000/api/0.6`) or private regional OSM servers.
+
+### Account & Token Manager
+- You can log in and manage OAuth credentials for each environment independently in the **Options** page.
+- Browsm isolates authentication tokens per endpoint in local storage (`browsm_auth_<endpointId>`), so you remain logged in across production, sandbox, and historical mapping environments simultaneously.
+
+---
+
+## 6. Tips & Best Practices
 - **Accurate Selections**: Selecting the complete street address (including city and postal code if present) yields the most accurate geocoding results.
 - **Local Caching**: Repeated lookups for the same place are loaded instantly from local storage cache without consuming API quotas.
+- **Safe Testing**: When experimenting with new features or editing workflows, enable **"Developer Mode (Writes Only)"** to test changesets safely against the sandbox while working with live POI data.
 - **Privacy & Safety**: Browsm only performs network requests to OpenStreetMap services when you explicitly trigger an address lookup or when structured data is detected on an active page.

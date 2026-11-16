@@ -1,101 +1,175 @@
 /**
- * OpenStreetMap Reactive Authentication Store (Svelte 5 Runes)
- * Provides centralized reactive authentication state, login, logout, and token restoration.
+ * OpenStreetMap Reactive Multi-Target Authentication Store (Svelte 5 Runes)
+ * Provides centralized reactive authentication state, login, logout, and token restoration
+ * across multiple endpoints (OSM Production, OSM Dev Sandbox, OpenHistoricalMap, Custom).
  */
 
 import {
   type OsmAuthState,
   type OsmUserDetails,
   type OsmAuthToken,
+  type OsmAuthConfig,
 } from '@/types/auth';
+import { getEndpointConfig, type EndpointConfig } from '@/types/settings';
 import {
   getStoredAuthState,
+  getAllStoredAuthStates,
   loginWithOsm,
   logoutOsm as logoutService,
+  AUTH_STORAGE_KEY_PREFIX,
+  LEGACY_AUTH_STORAGE_KEY,
 } from '@/services/osm-auth';
+import { settingsStore } from './settings.svelte';
 
 class AuthStore {
-  private _state = $state<OsmAuthState>({
-    isAuthenticated: false,
-    isLoading: true,
-  });
+  private _authStates = $state<Record<string, OsmAuthState>>({});
+  private _isLoading = $state<boolean>(true);
+  private _error = $state<string | undefined>(undefined);
 
   constructor() {
     this.init();
+    this.setupStorageListener();
+  }
+
+  /**
+   * The effective target endpoint ID for write and authentication operations.
+   * In developer mode (writes_only or reads_and_writes), this targets 'osm-dev'.
+   */
+  get activeTargetId(): string {
+    const routing = settingsStore.devModeRouting;
+    if (routing === 'writes_only' || routing === 'reads_and_writes') {
+      return 'osm-dev';
+    }
+    return settingsStore.activeEndpointId || 'osm-prod';
+  }
+
+  /**
+   * Active authentication state for the effective target endpoint.
+   */
+  get currentAuthState(): OsmAuthState {
+    return this.getAuthStateFor(this.activeTargetId);
   }
 
   get isAuthenticated(): boolean {
-    return this._state.isAuthenticated;
+    return this.currentAuthState.isAuthenticated;
   }
 
   get isLoading(): boolean {
-    return this._state.isLoading;
+    return this._isLoading;
   }
 
   get user(): OsmUserDetails | undefined {
-    return this._state.user;
+    return this.currentAuthState.user;
   }
 
   get token(): OsmAuthToken | undefined {
-    return this._state.token;
+    return this.currentAuthState.token;
   }
 
   get error(): string | undefined {
-    return this._state.error;
+    return this._error;
+  }
+
+  get allStates(): Record<string, OsmAuthState> {
+    return this._authStates;
   }
 
   /**
-   * Initializes authentication state from browser local storage.
+   * Returns the stored authentication state for any specified endpoint ID.
+   */
+  getAuthStateFor(endpointId: string): OsmAuthState {
+    const cleanId = (endpointId || 'osm-prod').trim();
+    return this._authStates[cleanId] || { isAuthenticated: false, isLoading: false };
+  }
+
+  /**
+   * Initializes authentication states from browser local storage across all endpoints.
    */
   async init(): Promise<void> {
     try {
-      this._state.isLoading = true;
-      const stored = await getStoredAuthState();
-      this._state.isAuthenticated = stored.isAuthenticated;
-      this._state.user = stored.user;
-      this._state.token = stored.token;
-      this._state.error = undefined;
+      this._isLoading = true;
+      const allStates = await getAllStoredAuthStates();
+      this._authStates = allStates;
+      this._error = undefined;
     } catch (err) {
-      this._state.error = err instanceof Error ? err.message : String(err);
+      this._error = err instanceof Error ? err.message : String(err);
+      console.debug('[Browsm] Failed to initialize auth store:', err);
     } finally {
-      this._state.isLoading = false;
+      this._isLoading = false;
     }
   }
 
   /**
-   * Triggers the OpenStreetMap OAuth 2.0 PKCE login flow.
+   * Listens for storage changes from other contexts to synchronize login state.
    */
-  async login(): Promise<void> {
+  private setupStorageListener(): void {
+    if (typeof browser !== 'undefined' && browser.storage?.onChanged) {
+      browser.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName === 'local') {
+          let shouldRefresh = false;
+          for (const key of Object.keys(changes)) {
+            if (key.startsWith(AUTH_STORAGE_KEY_PREFIX) || key === LEGACY_AUTH_STORAGE_KEY) {
+              shouldRefresh = true;
+              break;
+            }
+          }
+          if (shouldRefresh) {
+            this.init();
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * Triggers the OAuth 2.0 PKCE login flow for a target endpoint.
+   */
+  async login(endpointId?: string, configOverride?: Partial<OsmAuthConfig>): Promise<void> {
+    const targetId = endpointId || this.activeTargetId;
+    const endpointConfig = getEndpointConfig(targetId, settingsStore.customEndpoint);
+
+    const mergedConfig: Partial<OsmAuthConfig> = {
+      apiBaseUrl: endpointConfig.apiBaseUrl,
+      authUrl: endpointConfig.authUrl,
+      tokenUrl: endpointConfig.tokenUrl,
+      clientId: endpointConfig.clientId,
+      scopes: endpointConfig.scopes,
+      ...configOverride,
+    };
+
     try {
-      this._state.isLoading = true;
-      this._state.error = undefined;
-      const authResult = await loginWithOsm();
-      this._state.isAuthenticated = authResult.isAuthenticated;
-      this._state.user = authResult.user;
-      this._state.token = authResult.token;
+      this._isLoading = true;
+      this._error = undefined;
+      const authResult = await loginWithOsm(mergedConfig, fetch, targetId);
+      this._authStates = {
+        ...this._authStates,
+        [targetId]: authResult,
+      };
     } catch (err) {
-      this._state.error = err instanceof Error ? err.message : String(err);
+      this._error = err instanceof Error ? err.message : String(err);
       throw err;
     } finally {
-      this._state.isLoading = false;
+      this._isLoading = false;
     }
   }
 
   /**
-   * Logs out the user and clears stored credentials.
+   * Logs out the user and clears stored credentials for a specific endpoint.
    */
-  async logout(): Promise<void> {
+  async logout(endpointId?: string): Promise<void> {
+    const targetId = endpointId || this.activeTargetId;
     try {
-      this._state.isLoading = true;
-      await logoutService();
-      this._state.isAuthenticated = false;
-      this._state.user = undefined;
-      this._state.token = undefined;
-      this._state.error = undefined;
+      this._isLoading = true;
+      await logoutService(targetId);
+      this._authStates = {
+        ...this._authStates,
+        [targetId]: { isAuthenticated: false, isLoading: false },
+      };
+      this._error = undefined;
     } catch (err) {
-      this._state.error = err instanceof Error ? err.message : String(err);
+      this._error = err instanceof Error ? err.message : String(err);
     } finally {
-      this._state.isLoading = false;
+      this._isLoading = false;
     }
   }
 }

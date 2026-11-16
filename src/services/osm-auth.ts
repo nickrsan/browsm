@@ -11,9 +11,19 @@ import {
   type OsmAuthState,
   DEFAULT_OSM_AUTH_CONFIG,
 } from '@/types/auth';
+import { getEndpointConfig, type EndpointPreset } from '@/types/settings';
 import { getUserDetails } from './osm-api';
 
-const AUTH_STORAGE_KEY = 'browsm_osm_auth_state';
+export const LEGACY_AUTH_STORAGE_KEY = 'browsm_osm_auth_state';
+export const AUTH_STORAGE_KEY_PREFIX = 'browsm_auth_';
+
+/**
+ * Returns the storage key in browser.storage.local for a specific endpoint identifier.
+ */
+export function getAuthStorageKey(endpointId: string = 'osm-prod'): string {
+  const cleanId = (endpointId || 'osm-prod').trim();
+  return `${AUTH_STORAGE_KEY_PREFIX}${cleanId}`;
+}
 
 /**
  * Generates a cryptographically random OAuth 2.0 code verifier (RFC 7636).
@@ -137,19 +147,31 @@ export async function exchangeCodeForToken(
 }
 
 /**
- * Retrieves the stored OSM authentication state from browser storage.
+ * Retrieves the stored OSM authentication state for a specific endpoint from browser storage.
+ * Supports transparent migration from legacy un-namespaced auth key.
  */
-export async function getStoredAuthState(): Promise<OsmAuthState> {
+export async function getStoredAuthState(endpointId: string = 'osm-prod'): Promise<OsmAuthState> {
+  const storageKey = getAuthStorageKey(endpointId);
   try {
     if (typeof browser !== 'undefined' && browser.storage?.local) {
-      const data = await browser.storage.local.get(AUTH_STORAGE_KEY);
-      const state = data[AUTH_STORAGE_KEY] as OsmAuthState | undefined;
+      const data = await browser.storage.local.get([storageKey, LEGACY_AUTH_STORAGE_KEY]);
+      const state = data[storageKey] as OsmAuthState | undefined;
       if (state && state.token) {
         return state;
       }
+
+      // Check legacy key for backwards compatibility if querying osm-prod
+      if (endpointId === 'osm-prod' && data[LEGACY_AUTH_STORAGE_KEY]) {
+        const legacyState = data[LEGACY_AUTH_STORAGE_KEY] as OsmAuthState;
+        if (legacyState && legacyState.token) {
+          // Transparently migrate to namespaced storage
+          await browser.storage.local.set({ [storageKey]: legacyState });
+          return legacyState;
+        }
+      }
     }
   } catch (err) {
-    console.debug('[Browsm] Error reading auth state from storage:', err);
+    console.debug(`[Browsm] Error reading auth state for ${endpointId} from storage:`, err);
   }
 
   return {
@@ -159,44 +181,88 @@ export async function getStoredAuthState(): Promise<OsmAuthState> {
 }
 
 /**
- * Saves the OSM authentication state to browser local storage.
+ * Saves the OSM authentication state for a specific endpoint to browser local storage.
  */
-export async function saveStoredAuthState(state: OsmAuthState): Promise<void> {
+export async function saveStoredAuthState(
+  state: OsmAuthState,
+  endpointId: string = 'osm-prod'
+): Promise<void> {
+  const storageKey = getAuthStorageKey(endpointId);
   try {
     if (typeof browser !== 'undefined' && browser.storage?.local) {
-      await browser.storage.local.set({ [AUTH_STORAGE_KEY]: state });
+      await browser.storage.local.set({ [storageKey]: state });
     }
   } catch (err) {
-    console.debug('[Browsm] Error saving auth state to storage:', err);
+    console.debug(`[Browsm] Error saving auth state for ${endpointId} to storage:`, err);
   }
 }
 
 /**
- * Clears the stored OSM authentication state.
+ * Clears the stored OSM authentication state for a specific endpoint.
  */
-export async function clearStoredAuthState(): Promise<void> {
+export async function clearStoredAuthState(endpointId: string = 'osm-prod'): Promise<void> {
+  const storageKey = getAuthStorageKey(endpointId);
   try {
     if (typeof browser !== 'undefined' && browser.storage?.local) {
-      await browser.storage.local.remove(AUTH_STORAGE_KEY);
+      const keysToRemove = [storageKey];
+      if (endpointId === 'osm-prod') {
+        keysToRemove.push(LEGACY_AUTH_STORAGE_KEY);
+      }
+      await browser.storage.local.remove(keysToRemove);
     }
   } catch (err) {
-    console.debug('[Browsm] Error clearing auth state from storage:', err);
+    console.debug(`[Browsm] Error clearing auth state for ${endpointId} from storage:`, err);
   }
+}
+
+/**
+ * Retrieves all stored authentication states across all configured endpoints.
+ */
+export async function getAllStoredAuthStates(): Promise<Record<string, OsmAuthState>> {
+  const result: Record<string, OsmAuthState> = {};
+  try {
+    if (typeof browser !== 'undefined' && browser.storage?.local) {
+      const allData = await browser.storage.local.get(null);
+      for (const [key, value] of Object.entries(allData)) {
+        if (key.startsWith(AUTH_STORAGE_KEY_PREFIX)) {
+          const endpointId = key.substring(AUTH_STORAGE_KEY_PREFIX.length);
+          const state = value as OsmAuthState;
+          if (state && state.isAuthenticated) {
+            result[endpointId] = state;
+          }
+        }
+      }
+
+      // If osm-prod is not present in prefix map, check legacy key
+      if (!result['osm-prod'] && allData[LEGACY_AUTH_STORAGE_KEY]) {
+        const legacy = allData[LEGACY_AUTH_STORAGE_KEY] as OsmAuthState;
+        if (legacy && legacy.isAuthenticated) {
+          result['osm-prod'] = legacy;
+        }
+      }
+    }
+  } catch (err) {
+    console.debug('[Browsm] Error retrieving all auth states:', err);
+  }
+  return result;
 }
 
 /**
  * Orchestrates the full OpenStreetMap OAuth 2.0 PKCE login flow.
  * Opens `launchWebAuthFlow`, intercepts authorization code, exchanges it for access token,
- * fetches user details, and stores the state in `browser.storage.local`.
+ * fetches user details, and stores the state in `browser.storage.local` under the target endpoint ID.
  */
 export async function loginWithOsm(
   configOverride?: Partial<OsmAuthConfig>,
-  customFetch: typeof fetch = fetch
+  customFetch: typeof fetch = fetch,
+  endpointId?: string
 ): Promise<OsmAuthState> {
   const config: OsmAuthConfig = {
     ...DEFAULT_OSM_AUTH_CONFIG,
     ...configOverride,
   };
+
+  const targetEndpointId = endpointId || 'osm-prod';
 
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -248,14 +314,14 @@ export async function loginWithOsm(
     isLoading: false,
   };
 
-  await saveStoredAuthState(authState);
+  await saveStoredAuthState(authState, targetEndpointId);
 
   return authState;
 }
 
 /**
- * Logs out the current user by clearing stored authentication tokens.
+ * Logs out the user from a specific endpoint by clearing stored credentials.
  */
-export async function logoutOsm(): Promise<void> {
-  await clearStoredAuthState();
+export async function logoutOsm(endpointId: string = 'osm-prod'): Promise<void> {
+  await clearStoredAuthState(endpointId);
 }

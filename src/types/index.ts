@@ -9,3 +9,4 @@ export * from './diff';
 export * from './messaging';
 export * from './map';
 export * from './auth';
+export * from './settings';

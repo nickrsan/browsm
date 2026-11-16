@@ -19,6 +19,7 @@ export default defineConfig({
       "https://*.openstreetmap.org/*",
       "https://nominatim.openstreetmap.org/*",
       "https://tiles.openfreemap.org/*",
+      "https://*.openhistoricalmap.org/*",
     ],
     browser_specific_settings: {
       gecko: {

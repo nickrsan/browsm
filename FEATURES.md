@@ -48,3 +48,16 @@ This registry tracks existing and planned features of the Browsm extension to en
 30. **OSM Node & Structure Tag Editing**: Direct node creation (`PUT /api/0.6/node/create`), node modification (`PUT /api/0.6/node/{id}`), and way structure tag updates (`PUT /api/0.6/way/{id}`) with optimistic version tracking.
 31. **Non-Destructive Map Notes Submission**: Built-in Map Notes creator (`POST /api/0.6/notes`) formatting detected webpage POI details and suggested tags, enabling safe community suggestions without direct map edits.
 32. **Unified Reactive Authentication Header & Modal**: Svelte 5 `AuthHeader` displaying user avatar, username, changeset counter, and login/logout controls, paired with `NoteModal` for rapid note dispatch.
+
+## Multi-Endpoint & Developer Mode Configuration Features
+
+33. **Multi-Target Endpoint Presets**: One-click switching between OpenStreetMap Production (`api.openstreetmap.org`), OpenStreetMap Dev Sandbox (`master.apis.dev.openstreetmap.org`), OpenHistoricalMap (`openhistoricalmap.org`), and custom user-defined Rails port/regional server configurations.
+34. **Granular Developer Mode Routing (Read / Write Splitting)**:
+    - *Disabled (Live Production)*: Reads and writes interact directly with live OpenStreetMap.
+    - *Writes Only (Safe Sandbox Edits)*: Reads query live OSM production for real-world POIs and existing tags; all changesets, node edits, and map notes route safely to the OSM Dev API sandbox.
+    - *Full Dev Mode (Isolated Sandbox)*: Both reads and writes route exclusively to the OSM Dev API sandbox.
+35. **Per-Endpoint Token Isolation**: Isolated storage of OAuth 2.0 PKCE credentials in `browser.storage.local` (`browsm_auth_<endpointId>`), enabling users to stay logged into production, sandbox, and OHM simultaneously without credential conflicts.
+36. **Centralized Dynamic Endpoint Resolver**: Unified routing utility (`src/services/endpoint-resolver.ts`) resolving target API base URLs and tokens based on operation type (`read` vs. `write`) and developer mode settings.
+37. **Dedicated Options Dashboard & Quick-Settings Modal**: Full WebExtension settings page (`src/entrypoints/options/`) and embedded sidebar/popup quick-settings drawer for fast environment switching.
+38. **Visual Environment Status Badges**: High-contrast, color-coded badges in the sidebar and popup headers (`[DEV: WRITES ONLY]`, `[DEV: FULL]`, `[OHM]`, `[CUSTOM]`) providing visual awareness of active routing.
+39. **Mozilla Add-on Policy Host Permission Expansion**: Explicit declaration of `https://*.openhistoricalmap.org/*` in `wxt.config.ts` conforming to Mozilla least-privilege extension policies.

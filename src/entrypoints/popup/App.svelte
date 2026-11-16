@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import NoteModal from '@/components/NoteModal.svelte';
+  import SettingsModal from '@/components/SettingsModal.svelte';
+  import { settingsStore } from '@/stores/settings.svelte';
   import { messaging } from '@/lib/messaging';
   import type { SchemaOrgPlace } from '@/types/schema';
 
   let detectedPlace = $state<SchemaOrgPlace | null>(null);
   let statusMessage = $state<string>('Scanning page for place markup...');
   let isNoteModalOpen = $state<boolean>(false);
+  let isSettingsModalOpen = $state<boolean>(false);
 
   onMount(async () => {
     try {
@@ -65,8 +68,25 @@
     <div class="header-brand">
       <img src="/icon/browsm_32.png" alt="Browsm Logo" class="popup-logo" />
       <h2>Browsm</h2>
+      {#if settingsStore.badgeInfo.text}
+        <span class="popup-env-badge badge-{settingsStore.badgeInfo.variant}" data-testid="popup-env-badge">
+          {settingsStore.badgeInfo.text}
+        </span>
+      {/if}
     </div>
-    <span class="version-tag">v0.1.0</span>
+    <div class="header-actions">
+      <button
+        type="button"
+        class="btn-gear"
+        onclick={() => (isSettingsModalOpen = true)}
+        title="Settings & Dev Mode"
+        aria-label="Settings & Dev Mode"
+        data-testid="popup-gear-btn"
+      >
+        ⚙️
+      </button>
+      <span class="version-tag">v0.1.0</span>
+    </div>
   </header>
 
   {#if detectedPlace}
@@ -128,11 +148,16 @@
     initialLon={detectedPlace?.geo?.longitude || 0}
     onclose={() => (isNoteModalOpen = false)}
   />
+
+  <SettingsModal
+    isOpen={isSettingsModalOpen}
+    onClose={() => (isSettingsModalOpen = false)}
+  />
 </main>
 
 <style>
   .popup-container {
-    width: 300px;
+    width: 320px;
     padding: 12px;
     font-family: 'Noto Sans', Arial, Helvetica, sans-serif;
     color: #212121;
@@ -150,6 +175,55 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-gear {
+    background: none;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    line-height: 1;
+  }
+  .btn-gear:hover {
+    background-color: #eeeeee;
+  }
+  .popup-env-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .badge-warning {
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffe082;
+  }
+  .badge-danger {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ffcdd2;
+  }
+  .badge-purple {
+    background-color: #f3e5f5;
+    color: #6a1b9a;
+    border: 1px solid #e1bee7;
+  }
+  .badge-teal {
+    background-color: #e0f2f1;
+    color: #00695c;
+    border: 1px solid #b2dfdb;
+  }
+  .badge-default {
+    background-color: #e8f5e9;
+    color: #2e7d32;
   }
   .popup-logo {
     width: 24px;

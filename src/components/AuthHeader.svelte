@@ -1,8 +1,17 @@
 <script lang="ts">
   import { authStore } from '@/stores/auth.svelte';
+  import { settingsStore } from '@/stores/settings.svelte';
 
   let isLoggingIn = $state(false);
   let loginErrorMessage = $state<string | undefined>(undefined);
+
+  let targetEndpointName = $derived.by(() => {
+    const targetId = authStore.activeTargetId;
+    if (targetId === 'osm-dev') return 'OSM Dev Server';
+    if (targetId === 'openhistoricalmap') return 'OpenHistoricalMap';
+    if (targetId === 'custom') return settingsStore.customEndpoint?.name || 'Custom Server';
+    return 'OpenStreetMap';
+  });
 
   async function handleLogin() {
     isLoggingIn = true;
@@ -25,7 +34,7 @@
   {#if authStore.isLoading}
     <div class="auth-status-loading">
       <span class="auth-spinner"></span>
-      <span>Checking OpenStreetMap login status...</span>
+      <span>Checking {targetEndpointName} login status...</span>
     </div>
   {:else if authStore.isAuthenticated && authStore.user}
     <div class="auth-user-card" data-testid="auth-user-card">
@@ -36,10 +45,21 @@
           <div class="auth-avatar-placeholder">{authStore.user.username.charAt(0).toUpperCase()}</div>
         {/if}
         <div class="auth-user-details">
-          <span class="auth-username" data-testid="auth-username">{authStore.user.username}</span>
-          {#if authStore.user.changesetCount !== undefined}
-            <span class="auth-changeset-count">{authStore.user.changesetCount} changesets</span>
-          {/if}
+          <div class="auth-user-name-row">
+            <span class="auth-username" data-testid="auth-username">{authStore.user.username}</span>
+            {#if settingsStore.badgeInfo.text}
+              <span class="auth-target-badge badge-{settingsStore.badgeInfo.variant}" data-testid="auth-target-badge">
+                {settingsStore.badgeInfo.text}
+              </span>
+            {/if}
+          </div>
+          <div class="auth-meta-row">
+            {#if authStore.user.changesetCount !== undefined}
+              <span class="auth-changeset-count">{authStore.user.changesetCount} changesets</span>
+            {:else}
+              <span class="auth-changeset-count">{targetEndpointName}</span>
+            {/if}
+          </div>
         </div>
       </div>
       <button class="auth-logout-btn" onclick={handleLogout} data-testid="auth-logout-btn">
@@ -49,7 +69,10 @@
   {:else}
     <div class="auth-login-card" data-testid="auth-login-card">
       <div class="auth-login-prompt">
-        <span>Log in to edit POIs or upload changesets directly to OpenStreetMap.</span>
+        <span>Log in to edit POIs or upload changesets to <strong>{targetEndpointName}</strong>.</span>
+        {#if settingsStore.isDevMode}
+          <span class="dev-mode-hint">(Sandbox mode active — edits will not affect live map data)</span>
+        {/if}
       </div>
       <button
         class="auth-login-btn"
@@ -60,7 +83,7 @@
         {#if isLoggingIn}
           <span class="auth-spinner-small"></span> Logging in...
         {:else}
-          Log in with OpenStreetMap
+          Log in with {targetEndpointName}
         {/if}
       </button>
       {#if loginErrorMessage}
@@ -133,9 +156,61 @@
     flex-direction: column;
   }
 
+  .auth-user-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   .auth-username {
     font-weight: 600;
     color: #0f172a;
+  }
+
+  .auth-target-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .badge-warning {
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffe082;
+  }
+
+  .badge-danger {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ffcdd2;
+  }
+
+  .badge-purple {
+    background-color: #f3e5f5;
+    color: #6a1b9a;
+    border: 1px solid #e1bee7;
+  }
+
+  .badge-teal {
+    background-color: #e0f2f1;
+    color: #00695c;
+    border: 1px solid #b2dfdb;
+  }
+
+  .badge-default {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+  }
+
+  .dev-mode-hint {
+    display: block;
+    margin-top: 2px;
+    color: #d97706;
+    font-size: 11px;
+    font-style: italic;
   }
 
   @media (prefers-color-scheme: dark) {

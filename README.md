@@ -9,11 +9,11 @@ attraction, facility, etc), but the goal of future versions will be to provide a
 in-extension editor for location and tags.
 
 # Goals
-1. Facilitate checking and adding missing POIs to OpenStreetMap
-2. Aid in keeping existing POI data fresh by alerting the user of mismatches
-3. Allow the user to ein-extension editor for location and tags.
-dit without leaving the business' webpage so that data can be most easily transferred.
-4. Generally to aid frequent OpenStreetMap contributors in tasks related to editing and improving the map.
+1. Facilitate checking and adding missing POIs to OpenStreetMap and OpenHistoricalMap.
+2. Aid in keeping existing POI data fresh by alerting the user of mismatches directly from business web pages.
+3. Provide safe sandbox experimentation using Developer Mode routing ("Writes Only" split routing to the OSM Dev API).
+4. Allow seamless in-extension editing for location and tags without context switching.
+5. Generally aid OpenStreetMap and historical map contributors in verifying and improving the map.
 
 # Demo
 ![browsm_demo_2026_01_05.gif](docs/browsm_demo_2026_01_05.gif)

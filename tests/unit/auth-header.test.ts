@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import AuthHeader from '@/components/AuthHeader.svelte';
 import { authStore } from '@/stores/auth.svelte';
+import { settingsStore } from '@/stores/settings.svelte';
 
 describe('AuthHeader.svelte Component', () => {
   beforeEach(async () => {
@@ -20,6 +21,7 @@ describe('AuthHeader.svelte Component', () => {
         getRedirectURL: vi.fn().mockReturnValue('https://extension/osm-auth'),
       },
     };
+    await settingsStore.resetToDefaults();
     await authStore.logout();
   });
 
@@ -32,11 +34,21 @@ describe('AuthHeader.svelte Component', () => {
     });
   });
 
+  it('reflects active target endpoint when developer mode is active', async () => {
+    await settingsStore.setDevModeRouting('writes_only');
+    render(AuthHeader);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('auth-login-btn')).toHaveTextContent('Log in with OSM Dev Server');
+      expect(screen.getByText(/Sandbox mode active/i)).toBeInTheDocument();
+    });
+  });
+
   it('renders user details, avatar placeholder, and logout button when logged in', async () => {
     // Save auth state to storage so store initializes as logged in
     // @ts-ignore
     globalThis.browser.storage.local.get = vi.fn().mockResolvedValue({
-      browsm_osm_auth_state: {
+      'browsm_auth_osm-prod': {
         isAuthenticated: true,
         user: {
           id: 42,

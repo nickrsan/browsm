@@ -18,15 +18,25 @@ const mockChrome = {
   },
   storage: {
     local: {
-      get: vi.fn(async (key: string) => {
-        if (!key) return mockStorage;
-        return { [key]: mockStorage[key] };
+      get: vi.fn(async (keys?: string | string[] | null) => {
+        if (!keys) return { ...mockStorage };
+        if (Array.isArray(keys)) {
+          const res: Record<string, unknown> = {};
+          for (const k of keys) {
+            if (k in mockStorage) res[k] = mockStorage[k];
+          }
+          return res;
+        }
+        return { [keys]: mockStorage[keys] };
       }),
       set: vi.fn(async (items: Record<string, unknown>) => {
         Object.assign(mockStorage, items);
       }),
-      remove: vi.fn(async (key: string) => {
-        delete mockStorage[key];
+      remove: vi.fn(async (keys: string | string[]) => {
+        const keyList = Array.isArray(keys) ? keys : [keys];
+        for (const k of keyList) {
+          delete mockStorage[k];
+        }
       }),
       clear: vi.fn(async () => {
         Object.keys(mockStorage).forEach((k) => delete mockStorage[k]);

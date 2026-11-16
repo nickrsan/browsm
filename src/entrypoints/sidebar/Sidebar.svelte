@@ -3,6 +3,8 @@
   import MapLibreMap from '@/components/MapLibreMap.svelte';
   import AuthHeader from '@/components/AuthHeader.svelte';
   import NoteModal from '@/components/NoteModal.svelte';
+  import SettingsModal from '@/components/SettingsModal.svelte';
+  import { settingsStore } from '@/stores/settings.svelte';
   import { messaging } from '@/lib/messaging';
   import type { NominatimResult, OsmElement } from '@/types/osm';
   import type { EditorWorkflowState } from '@/types/messaging';
@@ -33,6 +35,7 @@
   let nearbyElementsList = $state<OsmElement[]>([]);
   let detectedPagePlace = $state<SchemaOrgPlace | null>(null);
   let isNoteModalOpen = $state<boolean>(false);
+  let isSettingsModalOpen = $state<boolean>(false);
 
   /**
    * Converts OSM elements into MapMarker and MapStructure items for the vector map.
@@ -233,8 +236,33 @@
 
 <div class="sidebar">
   <header class="sidebar-header">
-    <h1>Look up Address in OSM</h1>
-    <p class="subtitle">OpenStreetMap in-browser verification & editing</p>
+    <div class="header-top-row">
+      <div>
+        <div class="title-with-badge">
+          <h1>Look up Address in OSM</h1>
+          {#if settingsStore.badgeInfo.text}
+            <span
+              class="sidebar-env-badge badge-{settingsStore.badgeInfo.variant}"
+              title={settingsStore.badgeInfo.tooltip}
+              data-testid="sidebar-env-badge"
+            >
+              {settingsStore.badgeInfo.text}
+            </span>
+          {/if}
+        </div>
+        <p class="subtitle">OpenStreetMap in-browser verification & editing</p>
+      </div>
+      <button
+        type="button"
+        class="btn-gear"
+        onclick={() => (isSettingsModalOpen = true)}
+        title="Settings & Environments"
+        aria-label="Settings & Environments"
+        data-testid="sidebar-gear-btn"
+      >
+        ⚙️
+      </button>
+    </div>
   </header>
 
   <AuthHeader />
@@ -326,6 +354,11 @@
     initialLon={mapCenter[0]}
     onclose={() => (isNoteModalOpen = false)}
   />
+
+  <SettingsModal
+    isOpen={isSettingsModalOpen}
+    onClose={() => (isSettingsModalOpen = false)}
+  />
 </div>
 
 <style>
@@ -336,6 +369,62 @@
   }
   .sidebar-header {
     margin-bottom: 0.75em;
+  }
+  .header-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .btn-gear {
+    background: none;
+    border: none;
+    font-size: 1.25em;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background-color 0.15s ease;
+  }
+  .btn-gear:hover {
+    background-color: #e0e0e0;
+  }
+  .title-with-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .sidebar-env-badge {
+    font-size: 0.65em;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+  }
+  .badge-warning {
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffe082;
+  }
+  .badge-danger {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ffcdd2;
+  }
+  .badge-purple {
+    background-color: #f3e5f5;
+    color: #6a1b9a;
+    border: 1px solid #e1bee7;
+  }
+  .badge-teal {
+    background-color: #e0f2f1;
+    color: #00695c;
+    border: 1px solid #b2dfdb;
+  }
+  .badge-default {
+    background-color: #e8f5e9;
+    color: #2e7d32;
   }
   .sidebar-header h1 {
     font-size: 1.3em;

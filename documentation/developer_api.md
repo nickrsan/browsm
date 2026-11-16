@@ -85,6 +85,16 @@ browsm/
   - Generates itemized diffs between page metadata tags and live OSM element tags.
 
 ### OAuth 2.0 PKCE Client (`src/services/osm-auth.ts`)
+- `getAuthStorageKey(endpointId?: string): string`
+  - Generates namespaced storage key (e.g. `browsm_auth_osm-prod`, `browsm_auth_osm-dev`, `browsm_auth_openhistoricalmap`).
+- `getStoredAuthState(endpointId?: string): Promise<OsmAuthState>`
+  - Retrieves stored auth state for a specific endpoint with transparent legacy key migration.
+- `saveStoredAuthState(state: OsmAuthState, endpointId?: string): Promise<void>`
+  - Persists token and profile details under endpoint-isolated storage key.
+- `clearStoredAuthState(endpointId?: string): Promise<void>`
+  - Clears credentials for the specified endpoint.
+- `getAllStoredAuthStates(): Promise<Record<string, OsmAuthState>>`
+  - Retrieves all active auth states across configured endpoints.
 - `generateCodeVerifier(length?: number): string`
   - Generates cryptographically secure random string for RFC 7636 PKCE.
 - `generateCodeChallenge(verifier: string): Promise<string>`
@@ -93,10 +103,31 @@ browsm/
   - Generates OpenStreetMap OAuth 2.0 authorization URL.
 - `exchangeCodeForToken(config: OsmAuthConfig, code: string, codeVerifier: string): Promise<OsmAuthToken>`
   - Exchanges authorization code for bearer access token.
-- `loginWithOsm(configOverride?: Partial<OsmAuthConfig>): Promise<OsmAuthState>`
-  - Launches `browser.identity.launchWebAuthFlow`, completes token exchange, fetches user profile, and persists state in `browser.storage.local`.
-- `logoutOsm(): Promise<void>`
-  - Clears stored authentication state.
+- `loginWithOsm(configOverride?: Partial<OsmAuthConfig>, customFetch?: typeof fetch, endpointId?: string): Promise<OsmAuthState>`
+  - Launches `browser.identity.launchWebAuthFlow`, completes token exchange, fetches user profile, and persists state in `browser.storage.local` under target endpoint ID.
+- `logoutOsm(endpointId?: string): Promise<void>`
+  - Clears stored authentication state for the specified endpoint.
+
+### Centralized Endpoint Resolver (`src/services/endpoint-resolver.ts`)
+- `resolveApiEndpoint(operationType: 'read' | 'write', customSettings?: SettingsState, customAuthMap?: Record<string, OsmAuthState>): Promise<ResolvedEndpoint>`
+  - Resolves target API base URL, OAuth configuration, and credentials based on operation type and developer mode routing flags.
+- `resolveEndpointSync(operationType: 'read' | 'write', settings: SettingsState, authStateMap: Record<string, OsmAuthState>): ResolvedEndpoint`
+  - Synchronous resolver utility executing the split-routing decision matrix.
+- `getEndpointBadgeInfo(settings: SettingsState): EndpointBadgeInfo`
+  - Generates badge text, color variant, and tooltip for headers (`DEV: WRITES ONLY`, `DEV: FULL`, `OHM`, `CUSTOM`).
+
+### Reactive Settings Store (`src/stores/settings.svelte.ts`)
+- `settingsStore`: Svelte 5 runes-powered singleton class managing:
+  - `activeEndpointId`: Current target preset or custom endpoint ID.
+  - `devModeRouting`: Granular routing mode (`disabled`, `writes_only`, `reads_and_writes`).
+  - `customEndpoint`: User-configured custom instance URLs and credentials.
+  - `activeEndpointConfig`: Resolved `EndpointConfig`.
+  - `badgeInfo`: Current `EndpointBadgeInfo`.
+  - `isDevMode`: boolean flag.
+  - `setActiveEndpoint(id)`: Changes target endpoint preset.
+  - `setDevModeRouting(routing)`: Updates developer mode routing mode.
+  - `setCustomEndpoint(config, selectAsActive)`: Saves custom server configuration.
+  - `resetToDefaults()`: Restores factory configuration.
 
 ### OSM API 0.6 Client (`src/services/osm-api.ts`)
 - `getUserDetails(accessToken: string, baseUrl?: string): Promise<OsmUserDetails>`
