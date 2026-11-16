@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import NoteModal from '@/components/NoteModal.svelte';
   import { messaging } from '@/lib/messaging';
   import type { SchemaOrgPlace } from '@/types/schema';
 
   let detectedPlace = $state<SchemaOrgPlace | null>(null);
   let statusMessage = $state<string>('Scanning page for place markup...');
+  let isNoteModalOpen = $state<boolean>(false);
 
   onMount(async () => {
     try {
@@ -105,6 +107,9 @@
         <button class="btn-primary" onclick={handleSearchFromPopup}>
           Verify in OSM
         </button>
+        <button class="btn-note-popup" onclick={() => (isNoteModalOpen = true)}>
+          Quick Add Note
+        </button>
       </div>
     </div>
   {:else}
@@ -115,6 +120,14 @@
       </button>
     </div>
   {/if}
+
+  <NoteModal
+    isOpen={isNoteModalOpen}
+    place={detectedPlace}
+    initialLat={detectedPlace?.geo?.latitude || 0}
+    initialLon={detectedPlace?.geo?.longitude || 0}
+    onclose={() => (isNoteModalOpen = false)}
+  />
 </main>
 
 <style>
@@ -191,6 +204,9 @@
   }
   .action-buttons {
     margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
   .btn-primary {
     width: 100%;
@@ -204,6 +220,20 @@
   }
   .btn-primary:hover {
     background: #1b5e20;
+  }
+  .btn-note-popup {
+    width: 100%;
+    padding: 6px 8px;
+    background: #0284c7;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-note-popup:hover {
+    background: #0369a1;
   }
   .empty-card {
     padding: 12px 6px;

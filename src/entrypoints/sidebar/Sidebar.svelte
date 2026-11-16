@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import MapLibreMap from '@/components/MapLibreMap.svelte';
+  import AuthHeader from '@/components/AuthHeader.svelte';
+  import NoteModal from '@/components/NoteModal.svelte';
   import { messaging } from '@/lib/messaging';
   import type { NominatimResult, OsmElement } from '@/types/osm';
   import type { EditorWorkflowState } from '@/types/messaging';
@@ -30,6 +32,7 @@
   let lastTimestamp = $state<number>(0);
   let nearbyElementsList = $state<OsmElement[]>([]);
   let detectedPagePlace = $state<SchemaOrgPlace | null>(null);
+  let isNoteModalOpen = $state<boolean>(false);
 
   /**
    * Converts OSM elements into MapMarker and MapStructure items for the vector map.
@@ -234,6 +237,8 @@
     <p class="subtitle">OpenStreetMap in-browser verification & editing</p>
   </header>
 
+  <AuthHeader />
+
   <!-- Search input bar -->
   <form class="search-bar" onsubmit={handleDirectSearch}>
     <input
@@ -283,7 +288,10 @@
       {#if showEditInfo}
         <div id="edit_info">
           <h3>See an issue?</h3>
-          <button onclick={editLast}>Edit in iD</button>
+          <div class="action-btn-group">
+            <button onclick={editLast}>Edit in iD</button>
+            <button class="btn-note" onclick={() => (isNoteModalOpen = true)}>Create Map Note</button>
+          </div>
         </div>
       {/if}
 
@@ -311,6 +319,13 @@
       {/if}
     </div>
   {/if}
+  <NoteModal
+    isOpen={isNoteModalOpen}
+    place={detectedPagePlace}
+    initialLat={mapCenter[1]}
+    initialLon={mapCenter[0]}
+    onclose={() => (isNoteModalOpen = false)}
+  />
 </div>
 
 <style>
@@ -462,5 +477,17 @@
   }
   button:hover {
     background-color: #45a049;
+  }
+  .action-btn-group {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+  .btn-note {
+    background-color: #0284c7;
+  }
+  .btn-note:hover {
+    background-color: #0369a1;
   }
 </style>

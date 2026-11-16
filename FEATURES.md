@@ -39,3 +39,12 @@ This registry tracks existing and planned features of the Browsm extension to en
 24. **OSM Tag Normalization Engine**: Automated sanitization of address components (`addr:*`), phone numbers (international E.123 format), canonical URLs, and opening hours (`opening_hours`), plus Schema.org category mapping.
 25. **Direct In-Sidebar Search & Browse**: Dedicated search input in the sidebar allowing direct geocoding and live browsing of nearby POIs and building structures.
 26. **Compact Popup Place Inspector**: Lightweight extension popup card presenting detected place metadata and a 1-click shortcut to verify and edit in the sidebar workspace.
+
+## Phase 4 Features (OSM OAuth 2.0 PKCE Client & Changeset / Note Submission Service)
+
+27. **Zero-Server OAuth 2.0 PKCE Client (RFC 7636)**: Client-side Proof Key for Code Exchange using Web Cryptography API (`crypto.subtle`) for SHA-256 challenge generation, eliminating external secret-holding servers and securing public client authentication.
+28. **Secure Token Storage & Session Lifecycle**: Stores access tokens and user profile metadata in isolated `browser.storage.local` (`browsm_osm_auth_state`) with reactive session restoration across popup and sidebar surfaces.
+29. **OSM API 0.6 Changeset Management**: Type-safe XML serialization for opening changesets (`PUT /api/0.6/changeset/create`), attaching standardized tags (`created_by=Browsm <version>`, `source=website`), and closing changesets (`PUT /api/0.6/changeset/{id}/close`).
+30. **OSM Node & Structure Tag Editing**: Direct node creation (`PUT /api/0.6/node/create`), node modification (`PUT /api/0.6/node/{id}`), and way structure tag updates (`PUT /api/0.6/way/{id}`) with optimistic version tracking.
+31. **Non-Destructive Map Notes Submission**: Built-in Map Notes creator (`POST /api/0.6/notes`) formatting detected webpage POI details and suggested tags, enabling safe community suggestions without direct map edits.
+32. **Unified Reactive Authentication Header & Modal**: Svelte 5 `AuthHeader` displaying user avatar, username, changeset counter, and login/logout controls, paired with `NoteModal` for rapid note dispatch.

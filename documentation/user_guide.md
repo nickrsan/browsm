@@ -43,6 +43,21 @@ When you visit local business websites (restaurants, stores, clinics, bakeries, 
 
 ## 4. Reviewing & Editing in OpenStreetMap
 
+### Authenticating with OpenStreetMap
+1. At the top of the sidebar, click **"Log in with OpenStreetMap"**.
+2. A secure browser authorization window will open directly on `openstreetmap.org`.
+3. Grant permissions for reading preferences, editing map data, and writing notes.
+4. Browsm uses **OAuth 2.0 with PKCE (Proof Key for Code Exchange)** to authenticate directly from your browser without passing credentials through any third-party proxy servers.
+5. Once logged in, your OSM username, avatar, and changeset statistics appear in the header.
+
+### Submitting Map Notes (Non-Destructive Suggestions)
+If you discover a missing business, outdated phone number, or incorrect opening hours but do not want to directly edit map geometry:
+1. Click **"Create Map Note"** in the sidebar or **"Quick Add Note"** in the extension popup.
+2. Browsm automatically populates the note with coordinates, address details, phone number, website, and suggested OpenStreetMap tags formatted for local mappers.
+3. Add any personal observations (e.g. *"Verified open during visit"*).
+4. Click **"Post Note to OSM"**.
+5. A confirmation message with a direct link to `https://www.openstreetmap.org/note/<id>` will be displayed.
+
 ### Sidebar Place Inspector & Vector Map
 - **Vector Map View**: Powered by MapLibre GL and OpenFreeMap vector tiles, featuring crisp text rendering, fractional zooming, and dark mode synchronization.
 - **Marker Hierarchy**: Color-coded map pins distinguish matched live OSM entities (green), webpage sources (blue), nearby elements (orange), and custom pins (purple).

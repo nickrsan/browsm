@@ -8,3 +8,4 @@ export * from './schema';
 export * from './diff';
 export * from './messaging';
 export * from './map';
+export * from './auth';

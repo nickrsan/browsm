@@ -13,17 +13,24 @@ Browsm is built on the [WXT](https://wxt.dev) framework and [Svelte 5](https://s
 browsm/
 ├── src/
 │   ├── components/
-│   │   └── MapLibreMap.svelte # Encapsulated MapLibre vector map component
+│   │   ├── MapLibreMap.svelte # Encapsulated MapLibre vector map component
+│   │   ├── AuthHeader.svelte  # OSM OAuth user card & login/logout header
+│   │   └── NoteModal.svelte   # Non-destructive Map Note creation dialog
 │   ├── entrypoints/
 │   │   ├── background.ts      # Unified background service worker
 │   │   ├── content/           # In-page Schema.org & Microdata extractor
-│   │   ├── popup/             # Action popup UI
+│   │   ├── popup/             # Action popup UI & quick note trigger
 │   │   └── sidebar/           # Sidebar workspace & Vector Map
 │   ├── services/
 │   │   ├── schema-parser.ts   # JSON-LD, Microdata & OpenGraph extraction
 │   │   ├── tag-normalizer.ts  # Address, phone (E.123), website & hours normalizer
 │   │   ├── geocoding.ts       # Cached Nominatim geocoding client
-│   │   └── spatial-matcher.ts # OSM API 0.6 bbox parser & candidate matcher
+│   │   ├── spatial-matcher.ts # OSM API 0.6 bbox parser & candidate matcher
+│   │   ├── osm-auth.ts        # Zero-server OAuth 2.0 PKCE client
+│   │   ├── osm-api.ts         # OSM API 0.6 changeset, node & way transaction client
+│   │   └── osm-notes.ts       # OpenStreetMap Map Notes submission service
+│   ├── stores/
+│   │   └── auth.svelte.ts     # Svelte 5 reactive authentication store
 │   ├── lib/
 │   │   └── messaging.ts       # Type-safe extension messaging hub
 │   └── types/                 # Centralized TypeScript definitions
@@ -31,6 +38,7 @@ browsm/
 │       ├── map.ts             # Vector map models & OpenFreeMap styles
 │       ├── schema.ts          # Schema.org place representations
 │       ├── diff.ts            # Tag diffing & match session state
+│       ├── auth.ts            # OAuth tokens, user profiles, changesets & notes
 │       ├── messaging.ts       # Payload definitions
 │       └── index.ts           # Re-exports
 ├── tests/
@@ -75,6 +83,54 @@ browsm/
   - Scores candidates using Sørensen-Dice name similarity, coordinate distance, phone, and website.
 - `generateTagDiff(sourceTags: Record<string, string>, targetElement?: OsmElement): TagDiffItem[]`
   - Generates itemized diffs between page metadata tags and live OSM element tags.
+
+### OAuth 2.0 PKCE Client (`src/services/osm-auth.ts`)
+- `generateCodeVerifier(length?: number): string`
+  - Generates cryptographically secure random string for RFC 7636 PKCE.
+- `generateCodeChallenge(verifier: string): Promise<string>`
+  - Computes SHA-256 Base64URL challenge using standard Web Cryptography API (`crypto.subtle`).
+- `buildAuthorizationUrl(config: OsmAuthConfig, codeChallenge: string, state: string): string`
+  - Generates OpenStreetMap OAuth 2.0 authorization URL.
+- `exchangeCodeForToken(config: OsmAuthConfig, code: string, codeVerifier: string): Promise<OsmAuthToken>`
+  - Exchanges authorization code for bearer access token.
+- `loginWithOsm(configOverride?: Partial<OsmAuthConfig>): Promise<OsmAuthState>`
+  - Launches `browser.identity.launchWebAuthFlow`, completes token exchange, fetches user profile, and persists state in `browser.storage.local`.
+- `logoutOsm(): Promise<void>`
+  - Clears stored authentication state.
+
+### OSM API 0.6 Client (`src/services/osm-api.ts`)
+- `getUserDetails(accessToken: string, baseUrl?: string): Promise<OsmUserDetails>`
+  - Queries `GET /api/0.6/user/details` and parses user profile, changeset count, and roles.
+- `createChangeset(accessToken: string, params: CreateChangesetParams, baseUrl?: string): Promise<number>`
+  - Opens a new changeset with `created_by=Browsm` and `source=website`.
+- `closeChangeset(accessToken: string, changesetId: number, baseUrl?: string): Promise<void>`
+  - Closes an active changeset.
+- `createNode(accessToken: string, params: CreateNodeParams, baseUrl?: string): Promise<number>`
+  - Creates a new POI node and returns the created node ID.
+- `updateNode(accessToken: string, params: UpdateNodeParams, baseUrl?: string): Promise<number>`
+  - Updates an existing node and returns the incremented version.
+- `updateWayTags(accessToken: string, params: UpdateWayParams, baseUrl?: string): Promise<number>`
+  - Updates tags on an existing building structure/way.
+- `fetchElement(type: OsmElementType, id: number, baseUrl?: string): Promise<OsmElement>`
+  - Fetches XML for any node, way, or relation and parses structured `OsmElement`.
+
+### Map Notes Service (`src/services/osm-notes.ts`)
+- `createOsmNote(params: CreateNoteParams, accessToken?: string, baseUrl?: string): Promise<OsmNote>`
+  - Submits a non-destructive Map Note via `POST /api/0.6/notes`.
+- `fetchNote(noteId: number, baseUrl?: string): Promise<OsmNote | null>`
+  - Retrieves note status and community comments.
+- `formatNoteTextFromPlace(place: SchemaOrgPlace, suggestedTags?: Record<string, string>, userNote?: string): string`
+  - Formats detected place attributes and suggested tags into a clean note body.
+
+### Reactive Authentication Store (`src/stores/auth.svelte.ts`)
+- `authStore`: Svelte 5 runes-powered singleton class exposing:
+  - `isAuthenticated`: boolean
+  - `isLoading`: boolean
+  - `user`: `OsmUserDetails | undefined`
+  - `token`: `OsmAuthToken | undefined`
+  - `login()`: Initiates OAuth 2.0 PKCE flow.
+  - `logout()`: Clears credentials and resets state.
+  - `init()`: Restores authentication state from local storage.
 
 ---
 
