@@ -67,6 +67,16 @@ browsm/
   - Normalizes phone numbers to international standard format with proper country prefixes.
 - `normalizeWebsite(rawUrl?: string): string | undefined`
   - Validates and normalizes website URLs with `https://` protocol.
+- `validateOsmTag(key: string, value: string): { isValid: boolean; warning?: string }`
+  - Validates OSM tag keys and values in real time, checking for whitespace, international phone prefix requirements, URL protocols, and standard boolean enum values.
+- `COMMON_OSM_TAG_KEYS: string[]`
+  - Recommended list of common OSM POI keys used for autocomplete suggestions.
+
+### External Editors Launcher (`src/services/external-editors.ts`)
+- `getEditorUrl(editor: PreferredEditor, options: EditorLaunchOptions): string`
+  - Constructs URL for opening location or entity in iD, Rapid, or JOSM Remote Control.
+- `launchEditor(editor: PreferredEditor, options: EditorLaunchOptions, customFetch?: typeof fetch): Promise<EditorLaunchResult>`
+  - Dispatches editor launch via `window.open` for web-based editors (iD, Rapid) or triggers JOSM Remote Control HTTP GET on `http://127.0.0.1:8111/load_and_zoom`.
 
 ### Geocoding Service (`src/services/geocoding.ts`)
 - `geocodeQuery(query: string, options?: GeocodeOptions): Promise<NominatimResult[]>`

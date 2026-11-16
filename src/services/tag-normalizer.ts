@@ -240,3 +240,128 @@ export function convertSchemaPlaceToOsmTags(place: SchemaOrgPlace): OsmTags {
 
   return tags;
 }
+
+/**
+ * Common OpenStreetMap tag keys recommended for POIs and businesses.
+ */
+export const COMMON_OSM_TAG_KEYS: string[] = [
+  'name',
+  'alt_name',
+  'amenity',
+  'shop',
+  'tourism',
+  'leisure',
+  'office',
+  'craft',
+  'healthcare',
+  'building',
+  'addr:housenumber',
+  'addr:street',
+  'addr:city',
+  'addr:postcode',
+  'addr:state',
+  'addr:country',
+  'phone',
+  'website',
+  'email',
+  'opening_hours',
+  'cuisine',
+  'operator',
+  'brand',
+  'wheelchair',
+  'delivery',
+  'takeaway',
+  'outdoor_seating',
+  'description',
+  'contact:phone',
+  'contact:website',
+  'contact:email',
+  'contact:instagram',
+  'contact:facebook',
+  'wikidata',
+  'wikipedia',
+];
+
+/**
+ * Validates an individual OSM tag key and value, returning validation status and helpful warning hints.
+ */
+export function validateOsmTag(
+  key: string,
+  value: string
+): { isValid: boolean; warning?: string } {
+  if (!key || key.trim().length === 0) {
+    return { isValid: false, warning: 'Tag key cannot be empty.' };
+  }
+
+  const cleanKey = key.trim();
+  const cleanVal = value.trim();
+
+  // If value is empty, it represents tag deletion
+  if (cleanVal.length === 0) {
+    return { isValid: true };
+  }
+
+  // Key format check (no spaces, valid characters)
+  if (/\s/.test(cleanKey)) {
+    return { isValid: false, warning: 'OSM tag keys should not contain spaces (use colons or underscores).' };
+  }
+
+  // Phone validation
+  if (cleanKey === 'phone' || cleanKey === 'contact:phone' || cleanKey === 'fax') {
+    if (/[a-zA-Z]/.test(cleanVal)) {
+      return { isValid: false, warning: 'Phone number should not contain alphabetic characters.' };
+    }
+    if (!cleanVal.startsWith('+')) {
+      return {
+        isValid: true,
+        warning: 'OSM recommendation: Use international format starting with country code (e.g. +1 401 555 1234).',
+      };
+    }
+  }
+
+  // Website validation
+  if (cleanKey === 'website' || cleanKey === 'contact:website' || cleanKey === 'url') {
+    if (!/^https?:\/\//i.test(cleanVal)) {
+      return {
+        isValid: true,
+        warning: 'Websites in OSM should include protocol prefix (e.g. https://example.com).',
+      };
+    }
+    try {
+      new URL(cleanVal);
+    } catch {
+      return { isValid: false, warning: 'Invalid URL format.' };
+    }
+  }
+
+  // Email validation
+  if (cleanKey === 'email' || cleanKey === 'contact:email') {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanVal)) {
+      return { isValid: false, warning: 'Invalid email address format.' };
+    }
+  }
+
+  // Wheelchair validation
+  if (cleanKey === 'wheelchair') {
+    const validWheelchair = ['yes', 'no', 'limited', 'designated'];
+    if (!validWheelchair.includes(cleanVal.toLowerCase())) {
+      return {
+        isValid: true,
+        warning: `Standard values for wheelchair are: ${validWheelchair.join(', ')}`,
+      };
+    }
+  }
+
+  // Yes / No boolean tag values
+  if (['delivery', 'takeaway', 'outdoor_seating', 'drive_through'].includes(cleanKey)) {
+    const validBooleans = ['yes', 'no', 'limited', 'only'];
+    if (!validBooleans.includes(cleanVal.toLowerCase())) {
+      return {
+        isValid: true,
+        warning: `Standard values for ${cleanKey} are: ${validBooleans.join(', ')}`,
+      };
+    }
+  }
+
+  return { isValid: true };
+}

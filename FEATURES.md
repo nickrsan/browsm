@@ -61,3 +61,12 @@ This registry tracks existing and planned features of the Browsm extension to en
 37. **Dedicated Options Dashboard & Quick-Settings Modal**: Full WebExtension settings page (`src/entrypoints/options/`) and embedded sidebar/popup quick-settings drawer for fast environment switching.
 38. **Visual Environment Status Badges**: High-contrast, color-coded badges in the sidebar and popup headers (`[DEV: WRITES ONLY]`, `[DEV: FULL]`, `[OHM]`, `[CUSTOM]`) providing visual awareness of active routing.
 39. **Mozilla Add-on Policy Host Permission Expansion**: Explicit declaration of `https://*.openhistoricalmap.org/*` in `wxt.config.ts` conforming to Mozilla least-privilege extension policies.
+
+## Phase 5 Features (Redesigned Sidebar UI, Tag Comparison Matrix & External Editors)
+
+40. **Tag Comparison Matrix (`TagDiffTable.svelte`)**: Interactive 4-column diff table comparing OSM Tag Keys, Webpage Source Values, Live OSM Values, and Staged Editable Values with real-time validation warnings (phone format, URL protocols, wheelchair booleans).
+41. **Selective Tag Merge & Bulk Action Controls**: 1-click `→ Copy` from webpage, `↺ Revert` to OSM, inline custom edits, and `Apply All Suggested` bulk synchronization.
+42. **Interactive Custom Tag Addition with Autocomplete**: Add custom tag key/value pairs with built-in `<datalist>` auto-completion of common OSM POI keys (`operator`, `cuisine`, `wheelchair`, `delivery`, `brand`, etc.).
+43. **Changeset Commit Workflow (`ChangesetModal.svelte`)**: Dialog with target environment safety badges, before/after tag diff preview chips, changeset comment and source inputs, real-time upload progress, and direct links to created changesets and elements.
+44. **External Editor Launcher Integration (`external-editors.ts`)**: 1-click launch of iD Web Editor, Rapid Editor, and desktop JOSM (via Remote Control port 8111) pre-centered and pre-selecting the active node or structure polygon.
+45. **Playwright Browser Extension E2E Suite**: End-to-end testing with unpacked Chromium extension fixtures verifying popup, sidebar, options dashboard, and settings interactions.

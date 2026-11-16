@@ -64,7 +64,46 @@ If you discover a missing business, outdated phone number, or incorrect opening 
 - **Building & Structure Polygons**: Building perimeters with POI tags are rendered with semi-transparent polygon fills and outline strokes.
 - **Nearby Places List**: Lists detected OSM nodes and structures in the immediate vicinity.
 - **Nominatim Response**: Click **"Show Response"** to inspect the structured geocoding details, place rank, category, and OpenStreetMap element ID.
-- **Edit in iD**: If an OSM element exists (`node`, `way`, or `relation`), click **"Edit in iD"** to open the official OpenStreetMap web editor directly focused on the element for instant updates.
+### Tag Comparison Matrix & Diff Review
+When a location is selected or searched, Browsm compares the extracted webpage metadata against the live OpenStreetMap entity:
+1. **Side-by-Side Review**: A 4-column matrix displays `OSM Tag Key`, `Webpage Source`, `Live OSM Value`, and `Staged Value`.
+2. **Visual Status Badges**:
+   - 🟢 `Matches OSM`: Webpage and live OpenStreetMap data are in sync.
+   - 🟡 `Missing in OSM`: Webpage contains verified information (e.g. phone number or website) not currently on the map.
+   - 🔵 `Outdated / Different`: Webpage data differs from the existing OSM tag.
+   - 🟣 `Staged`: Value has been modified or added for the upcoming changeset.
+3. **1-Click Merge & Reset**:
+   - Click `→ Copy` next to any webpage value to stage it immediately.
+   - Click `↺ Revert` to restore the original live OSM value.
+   - Click **"Apply All Suggested"** to copy all missing and updated tags from the page at once.
+   - Click **"Reset All"** to discard all staged edits.
+4. **Inline Editing & Real-Time Validation**:
+   - Type directly into the staged value box to customize tags.
+   - Real-time warnings alert you to format issues (e.g. international phone formats with country codes, website URL prefixes, valid wheelchair tag values).
+5. **Adding Custom Tags**:
+   - Use the **"Add Custom Tag"** panel at the bottom of the matrix.
+   - Built-in autocomplete suggests recommended OSM keys (`cuisine`, `wheelchair`, `operator`, `brand`, `delivery`, `takeaway`, etc.).
+
+### Committing Changesets to OpenStreetMap
+Once you have reviewed and staged your tag edits:
+1. Click **"Commit Changeset..."** in the bottom action bar.
+2. The **Commit to OpenStreetMap** modal opens:
+   - **Environment Safety Banner**: Confirms whether you are committing to **Live Production OSM** (with a safety reminder) or the **Developer Sandbox**.
+   - **Target Summary**: Shows whether you are updating an existing node/structure or creating a new POI node.
+   - **Diff Review Chips**: Color-coded chips summarize added (`+`), modified (`⇄`), and deleted (`-`) tags.
+   - **Changeset Comment**: Enter a brief summary of your survey (prefilled with your preferred default prefix and place name).
+   - **Source**: Specify the data source (defaults to `website`).
+3. Click **"Confirm & Upload Changeset"**.
+4. Browsm opens the changeset, applies your edits, and closes the changeset automatically.
+5. On completion, direct links to the uploaded Changeset and modified Element on OpenStreetMap are displayed.
+
+### Launching External Editors (iD, Rapid, JOSM)
+If you need to perform advanced geometric mapping, relation editing, or complex building modifications:
+1. In the bottom action bar, click **"Edit in [Editor] ▾"**.
+2. Select your preferred editor:
+   - **iD Web Editor**: Opens the official OpenStreetMap in-browser editor pre-zoomed and selecting the target element.
+   - **Rapid Web Editor**: Opens Rapid editor with map features loaded.
+   - **JOSM Remote Control**: Sends a direct command to your running desktop JOSM editor via `http://127.0.0.1:8111` to download the bounding box and select the entity automatically.
 
 ---
 

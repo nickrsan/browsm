@@ -67,11 +67,11 @@ describe('Sidebar.svelte (Svelte 5 Workspace)', () => {
     };
   });
 
-  it('renders initial instructions state and header', () => {
+  it('renders initial instructions state and header title', () => {
     render(Sidebar);
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Look up Address in OSM');
-    expect(screen.getByText(/To get started, select an address on a web page/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Browsm');
+    expect(screen.getByText(/How to use Browsm:/i)).toBeInTheDocument();
   });
 
   it('renders the vector map container element', () => {
@@ -104,24 +104,49 @@ describe('Sidebar.svelte (Svelte 5 Workspace)', () => {
     render(Sidebar);
 
     await waitFor(() => {
-      expect(screen.getByText('See an issue?')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Edit in iD/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: /The Ocean Cafe/i })).toBeInTheDocument();
+      expect(screen.getByText('Tag Diff Matrix')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Commit Changeset/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Create Note/i })).toBeInTheDocument();
     });
 
-    // Test toggle full response button
-    const toggleButton = screen.getByRole('button', { name: /Show Response/i });
-    expect(toggleButton).toBeInTheDocument();
+    // Test tab navigation (Raw Geo Data)
+    const rawTab = screen.getByRole('button', { name: /Raw Geo Data/i });
+    await fireEvent.click(rawTab);
 
-    await fireEvent.click(toggleButton);
-    expect(screen.getByRole('button', { name: /Hide Response/i })).toBeInTheDocument();
-    expect(screen.getByText(/The Ocean Cafe, Newport, RI/)).toBeInTheDocument();
+    expect(screen.getAllByText(/The Ocean Cafe, Newport, RI/).length).toBeGreaterThan(0);
+  });
 
-    // Test clicking Edit in iD
-    const editButton = screen.getByRole('button', { name: /Edit in iD/i });
-    await fireEvent.click(editButton);
+  it('triggers direct search messaging on form submit', async () => {
+    const sendMessageSpy = vi.spyOn(messaging, 'sendMessage').mockResolvedValue(undefined as any);
 
-    expect((globalThis as any).browser.tabs.create).toHaveBeenCalledWith({
-      url: 'https://www.openstreetmap.org/edit?node=123456',
+    render(Sidebar);
+
+    const searchInput = screen.getByPlaceholderText('Search address, POI, or coordinates...');
+    const searchBtn = screen.getByRole('button', { name: 'Search' });
+
+    await fireEvent.input(searchInput, { target: { value: 'Bellevue Ave Newport' } });
+    await fireEvent.click(searchBtn);
+
+    expect(sendMessageSpy).toHaveBeenCalledWith('searchPoi', {
+      query: 'Bellevue Ave Newport',
+      source: 'manual_search',
+    });
+  });
+
+  it('opens and closes settings modal via gear button', async () => {
+    render(Sidebar);
+
+    const gearBtn = screen.getByTestId('sidebar-gear-btn');
+    await fireEvent.click(gearBtn);
+
+    expect(screen.getByRole('heading', { level: 2, name: /Quick Settings/i })).toBeInTheDocument();
+
+    const closeBtn = screen.getByRole('button', { name: /Close settings/i });
+    await fireEvent.click(closeBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { level: 2, name: /Quick Settings/i })).not.toBeInTheDocument();
     });
   });
 });
