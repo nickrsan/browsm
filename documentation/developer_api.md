@@ -1,6 +1,6 @@
 # Browsm Developer & API Documentation
 
-This document describes the architectural layout, TypeScript data models, messaging protocols, testing strategy, and coding standards for developers contributing to the Browsm extension.
+This document describes the architectural layout, TypeScript data models, services, messaging protocols, testing strategy, and coding standards for developers contributing to the Browsm extension.
 
 ---
 
@@ -16,8 +16,14 @@ browsm/
 │   │   └── MapLibreMap.svelte # Encapsulated MapLibre vector map component
 │   ├── entrypoints/
 │   │   ├── background.ts      # Unified background service worker
+│   │   ├── content/           # In-page Schema.org & Microdata extractor
 │   │   ├── popup/             # Action popup UI
 │   │   └── sidebar/           # Sidebar workspace & Vector Map
+│   ├── services/
+│   │   ├── schema-parser.ts   # JSON-LD, Microdata & OpenGraph extraction
+│   │   ├── tag-normalizer.ts  # Address, phone (E.123), website & hours normalizer
+│   │   ├── geocoding.ts       # Cached Nominatim geocoding client
+│   │   └── spatial-matcher.ts # OSM API 0.6 bbox parser & candidate matcher
 │   ├── lib/
 │   │   └── messaging.ts       # Type-safe extension messaging hub
 │   └── types/                 # Centralized TypeScript definitions
@@ -36,21 +42,39 @@ browsm/
 
 ---
 
-## 2. TypeScript Data Contracts
+## 2. Core Services API
 
-All core entities are strictly typed in `src/types/`:
+### Schema Parser (`src/services/schema-parser.ts`)
+- `extractSchemaFromDocument(doc: Document, sourceUrl: string): SchemaOrgPlace | null`
+  - Scans `<script type="application/ld+json">` (direct, arrays, and `@graph` structures), HTML5 Microdata (`[itemscope][itemtype]`), and OpenGraph fallback meta tags.
+- `isSupportedSchemaType(typeValue: unknown): boolean`
+  - Validates whether a schema `@type` matches supported local business / place categories.
 
-### OpenStreetMap & Nominatim Models (`src/types/osm.ts`)
-- `OsmElement`: Represents a live OSM Node, Way, or Relation with tags and optional structure geometry.
-- `OsmChangeset`: Structure for staging and submitting changeset metadata (`created_by`, `comment`, `source`).
-- `NominatimResult`: Strongly-typed schema for Nominatim responses (`osm_id`, `display_name`, `lat`, `lon`, `address`).
+### Tag Normalizer (`src/services/tag-normalizer.ts`)
+- `convertSchemaPlaceToOsmTags(place: SchemaOrgPlace): OsmTags`
+  - Converts a structured `SchemaOrgPlace` into standardized OSM tags.
+- `normalizeAddressToTags(address?: SchemaOrgAddress): OsmTags`
+  - Splits street strings into `addr:housenumber` and `addr:street`, maps `addr:city`, `addr:state`, `addr:postcode`, `addr:country`.
+- `normalizePhoneToE123(rawPhone?: string): string | undefined`
+  - Normalizes phone numbers to international standard format with proper country prefixes.
+- `normalizeWebsite(rawUrl?: string): string | undefined`
+  - Validates and normalizes website URLs with `https://` protocol.
 
-### Schema.org Place Models (`src/types/schema.ts`)
-- `SchemaOrgPlace`: Normalized representation of business metadata extracted from web pages (`name`, `address`, `geo`, `telephone`, `url`, `openingHours`).
+### Geocoding Service (`src/services/geocoding.ts`)
+- `geocodeQuery(query: string, options?: GeocodeOptions): Promise<NominatimResult[]>`
+  - Free-form address search with User-Agent enforcement and 24-hour local storage caching (`browser.storage.local`).
+- `geocodeStructured(params: Record<string, string>, options?: GeocodeOptions): Promise<NominatimResult[]>`
+  - Structured discrete parameter geocoding.
+- `clearGeocodingCache(): Promise<void>`
+  - Purges all cached geocoding records from local storage.
 
-### Tag Diff Models (`src/types/diff.ts`)
-- `TagDiffItem`: Represents a key-level discrepancy between page metadata and OSM live tags (`identical`, `missing_in_osm`, `outdated_in_osm`, `new_in_page`).
-- `SearchSessionState`: Tracks the active search/browse workflow state.
+### Spatial Matcher Service (`src/services/spatial-matcher.ts`)
+- `fetchOsmElementsInBbox(bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number }): Promise<OsmElement[]>`
+  - Queries `https://api.openstreetmap.org/api/0.6/map?bbox=...` and parses both standalone `<node>` elements and `<way>` building structures with geometry centroids.
+- `findBestMatch(target: { name?: string; phone?: string; website?: string; lat?: number; lon?: number }, candidates: OsmElement[]): SpatialMatchResult`
+  - Scores candidates using Sørensen-Dice name similarity, coordinate distance, phone, and website.
+- `generateTagDiff(sourceTags: Record<string, string>, targetElement?: OsmElement): TagDiffItem[]`
+  - Generates itemized diffs between page metadata tags and live OSM element tags.
 
 ---
 
@@ -64,17 +88,17 @@ Messaging between background service workers, content scripts, popup, and sideba
 | `adjustMap` | `AdjustMapPayload` | Repositions map marker and transmits resolved place attributes. |
 | `updateIcon` | `UpdateIconPayload` | Updates toolbar action icon (`active`, `inactive`, `no-address`). |
 | `showMap` | `ShowMapPayload` | Center map on arbitrary coordinate pair. |
-| `schemaDetected` | `SchemaDetectedPayload` | Emits parsed Schema.org place from content script. |
-| `searchPoi` | `SearchPoiPayload` | Initiates text or coordinate search from UI or selection. |
+| `schemaDetected` | `SchemaDetectedPayload` | Emits parsed Schema.org place from content script to background. |
+| `searchPoi` | `SearchPoiPayload` | Initiates text or coordinate search from UI, popup, or context menu selection. |
 
 ---
 
 ## 4. Svelte 5 Runes Architecture
 
 All components utilize Svelte 5 standard runes:
-- `$state`: Reactive variables for UI state, map references, and form inputs.
+- `$state`: Reactive variables for UI state, map coordinates, search queries, and nearby element lists.
 - `$derived`: Reactive computed values for diff summaries and validation checks.
-- `$effect`: Encapsulated lifecycle effects with explicit teardown functions (used for Leaflet map destruction and event unsubscriptions to prevent memory leaks).
+- `$effect`: Encapsulated lifecycle effects with explicit teardown functions (used for map resize listeners, storage sync, and message subscriptions).
 - `onclick`: Standard DOM event handlers replacing legacy `on:click` directives.
 
 ---

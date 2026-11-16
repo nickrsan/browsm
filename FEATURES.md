@@ -28,3 +28,14 @@ This registry tracks existing and planned features of the Browsm extension to en
 16. **Structure & Building Polygon Overlays**: Interactive GeoJSON polygon rendering for building perimeters and structures (`way` geometry) with hover effects and selection highlighting.
 17. **Semantic POI Marker Hierarchy**: Color-coded SVG marker pins distinguishing matched live OSM entities (green), webpage sources (blue), nearby elements (orange), and custom pins (purple).
 18. **Responsive Map Lifecycle**: Encapsulated Svelte 5 `$effect` lifecycle with automatic `ResizeObserver` viewport tracking and comprehensive WebGL canvas memory cleanup.
+
+## Phase 3 Features (In-Page Schema Extraction, Context Selection & Direct Search Engine)
+
+19. **In-Page Schema.org & Microdata Extraction**: Automatic content-script detection of structured JSON-LD (`@graph`, arrays, nested entities), HTML5 Microdata (`itemscope` `itemtype`), and OpenGraph metadata for local businesses, restaurants, and places.
+20. **Dynamic Toolbar Action Badging & Tooltips**: High-contrast emerald green badge (`POI`) and descriptive action tooltips signaling detected places to the user unobtrusively.
+21. **Cached Nominatim Geocoding**: High-performance structured and free-form address lookup with local `browser.storage.local` caching (24-hour TTL) and User-Agent compliance.
+22. **OSM API 0.6 Micro Bounding-Box Retrieval**: Real-time XML querying (`/api/0.6/map?bbox=...`) parsing both standalone POI nodes and building structures (`way` polygons with centroids).
+23. **Spatial & Tag Candidate Matching**: Multi-criteria matching scoring name similarity (Sørensen-Dice coefficient), geographic proximity, phone, and website against live OSM entities.
+24. **OSM Tag Normalization Engine**: Automated sanitization of address components (`addr:*`), phone numbers (international E.123 format), canonical URLs, and opening hours (`opening_hours`), plus Schema.org category mapping.
+25. **Direct In-Sidebar Search & Browse**: Dedicated search input in the sidebar allowing direct geocoding and live browsing of nearby POIs and building structures.
+26. **Compact Popup Place Inspector**: Lightweight extension popup card presenting detected place metadata and a 1-click shortcut to verify and edit in the sidebar workspace.
