@@ -31,11 +31,34 @@ export const test = base.extend<ExtensionFixtures>({
   },
 
   extensionId: async ({ context }, use) => {
-    let [background] = context.serviceWorkers();
-    if (!background) {
-      background = await context.waitForEvent('serviceworker');
+    // Look for Browsm's background service worker
+    let workers = context.serviceWorkers();
+    let browsmWorker = workers.find(
+      (sw) => sw.url().endsWith('/background.js') && !sw.url().includes('admccjkmockfdflocgggjfgdacdodkdf')
+    );
+
+    if (!browsmWorker) {
+      // Query chrome://extensions-internals as a reliable way to get loaded extension ID
+      try {
+        const tempPage = await context.newPage();
+        await tempPage.goto('chrome://extensions-internals');
+        const text = await tempPage.textContent('body');
+        const exts = JSON.parse(text || '[]');
+        const browsmExt = exts.find((e: { name: string; id: string }) => e.name === 'Browsm');
+        await tempPage.close();
+        if (browsmExt?.id) {
+          await use(browsmExt.id);
+          return;
+        }
+      } catch {
+        // Fallback
+      }
+
+      const sw = await context.waitForEvent('serviceworker', { timeout: 5000 });
+      browsmWorker = sw;
     }
-    const extensionId = background.url().split('/')[2];
+
+    const extensionId = browsmWorker.url().split('/')[2];
     await use(extensionId);
   },
 

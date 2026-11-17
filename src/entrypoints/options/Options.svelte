@@ -608,6 +608,27 @@
             Periodically checks for new direct messages and changeset discussions while the sidebar is open.
           </small>
         </div>
+
+        <div class="form-group">
+          <label for="nearby-search-radius">Nearby Places Search Radius: <strong>{settingsStore.nearbySearchRadius}m</strong></label>
+          <div class="range-control-row">
+            <input
+              id="nearby-search-radius"
+              type="range"
+              min="10"
+              max="500"
+              step="10"
+              value={settingsStore.nearbySearchRadius}
+              oninput={(e) => settingsStore.setNearbySearchRadius(Number((e.target as HTMLInputElement).value))}
+              class="radius-slider"
+              data-testid="nearby-radius-slider"
+            />
+            <span class="range-value-label">{settingsStore.nearbySearchRadius}m</span>
+          </div>
+          <small class="field-hint">
+            Configures the maximum distance (10m - 500m, default 50m) to search for nearby OpenStreetMap elements.
+          </small>
+        </div>
       </div>
 
       <div class="card-footer">
@@ -922,6 +943,27 @@
     border: 1px solid #cccccc;
     border-radius: 4px;
     font-size: 13px;
+  }
+
+  .range-control-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .radius-slider {
+    flex: 1;
+    accent-color: #2e7d32;
+    cursor: pointer;
+    padding: 0 !important;
+  }
+
+  .range-value-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #2e7d32;
+    min-width: 48px;
+    text-align: right;
   }
 
   .field-hint {

@@ -62,6 +62,23 @@ export interface SchemaDetectedPayload {
 }
 
 /**
+ * Payload sent when page domain navigation or URL change occurs.
+ */
+export interface PageDomainChangedPayload {
+  previousDomain?: string;
+  newDomain: string;
+  url: string;
+  tabId?: number;
+}
+
+/**
+ * Payload sent to reset the sidebar state.
+ */
+export interface ResetSidebarPayload {
+  reason?: string;
+}
+
+/**
  * Payload sent to initiate a search query from page text selection or manual input.
  */
 export interface SearchPoiPayload {

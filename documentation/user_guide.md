@@ -69,7 +69,9 @@ If you discover a missing business, outdated phone number, or incorrect opening 
 - **Vector Map View**: Powered by MapLibre GL and OpenFreeMap vector tiles, featuring crisp text rendering, fractional zooming, and dark mode synchronization.
 - **Marker Hierarchy**: Color-coded map pins distinguish matched live OSM entities (green), webpage sources (blue), nearby elements (orange), and custom pins (purple).
 - **Building & Structure Polygons**: Building perimeters with POI tags are rendered with semi-transparent polygon fills and outline strokes.
-- **Nearby Places List**: Lists detected OSM nodes and structures in the immediate vicinity.
+- **Nearby Places List**: Lists detected OSM nodes and structures in the immediate vicinity. Untagged nodes and ways lacking descriptive tags are filtered out, and tagged point nodes are prioritized ahead of area polygons, ordered by distance.
+- **Configurable Nearby Search Radius**: You can adjust the search distance threshold (from 10 meters up to 500 meters, defaulting to 50 meters) in either the Quick Settings modal (`⚙️`) or the Options dashboard.
+- **Clean Domain Transitions**: When you navigate to a new website domain, Browsm automatically clears previous candidate diffs and inspection state, keeping your workspace clean without premature search indicators.
 - **Nominatim Response**: Click **"Show Response"** to inspect the structured geocoding details, place rank, category, and OpenStreetMap element ID.
 ### Tag Comparison Matrix & Diff Review
 When a location is selected or searched, Browsm compares the extracted webpage metadata against the live OpenStreetMap entity:

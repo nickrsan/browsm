@@ -4,7 +4,9 @@ import {
   calculateBboxAroundCoords,
   fetchOsmElementsInBbox,
   findBestMatch,
+  filterAndSortNearbyElements,
 } from '@/services/spatial-matcher';
+import { loadStoredSettings } from '@/services/endpoint-resolver';
 import { convertSchemaPlaceToOsmTags } from '@/services/tag-normalizer';
 import type { NominatimResult } from '@/types/osm';
 import type { SearchSessionState } from '@/types/diff';
@@ -77,9 +79,12 @@ export default defineBackground(() => {
       return null;
     }
 
-    // Step 2: Fetch all OSM elements in a 50m micro-bounding box
-    const bbox = calculateBboxAroundCoords(parsedLat, parsedLon, 50);
-    const nearbyElements = await fetchOsmElementsInBbox(bbox);
+    // Step 2: Fetch all OSM elements in a micro-bounding box based on user radius setting
+    const settings = await loadStoredSettings();
+    const searchRadius = settings.nearbySearchRadius ?? 50;
+    const bbox = calculateBboxAroundCoords(parsedLat, parsedLon, searchRadius);
+    const rawElements = await fetchOsmElementsInBbox(bbox);
+    const nearbyElements = filterAndSortNearbyElements(rawElements, parsedLat, parsedLon, searchRadius);
 
     // Step 3: Score best matching element
     const matchResult = findBestMatch(
@@ -185,6 +190,22 @@ export default defineBackground(() => {
         });
       }
     }
+  });
+
+  // Handle page domain navigation change from content scripts
+  messaging.onMessage('pageDomainChanged', async ({ data: payload, sender }) => {
+    const tabId = payload.tabId ?? sender?.tab?.id;
+    if (tabId !== undefined) {
+      await browser.action.setBadgeText({ text: '', tabId }).catch(() => {});
+      await browser.action.setTitle({ title: 'Browsm: OpenStreetMap Companion', tabId }).catch(() => {});
+      await browser.storage.local
+        .remove([`tab_schema_${tabId}`, 'currentSchema', 'lookupState', 'searchSession'])
+        .catch(() => {});
+    } else {
+      await browser.storage.local.remove(['currentSchema', 'lookupState', 'searchSession']).catch(() => {});
+    }
+
+    messaging.sendMessage('resetSidebar', { reason: 'domain_changed' });
   });
 
   // Handle in-page Schema.org detection from content scripts

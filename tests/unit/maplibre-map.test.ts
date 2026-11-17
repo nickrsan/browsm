@@ -201,4 +201,45 @@ describe('MapLibreMap.svelte & Map Types', () => {
       expect(mockMarkerAddTo).toHaveBeenCalled();
     });
   });
+
+  it('renders fallback content when MapLibre initialization throws or WebGL is unsupported', async () => {
+    const { Map } = vi.mocked(await import('maplibre-gl'));
+    Map.mockImplementationOnce(function () {
+      throw new Error('WebGL unsupported');
+    });
+
+    const { container } = render(MapLibreMap, {
+      center: [-71.3128, 41.4901],
+      zoom: 14,
+      markers: [
+        {
+          id: 'poi-1',
+          lat: 41.4901,
+          lon: -71.3128,
+          title: 'Fallback POI',
+        },
+      ],
+    });
+
+    const fallback = container.querySelector('.browsm-map-fallback');
+    expect(fallback).toBeInTheDocument();
+    expect(fallback?.textContent).toContain('Vector Map View');
+    expect(fallback?.textContent).toContain('41.49010, -71.31280');
+    expect(fallback?.textContent).toContain('1 POI(s) detected at this location');
+  });
+
+  it('handles map click callback passing lat and lon', () => {
+    const onMapClick = vi.fn();
+    render(MapLibreMap, {
+      center: [-71.3128, 41.4901],
+      zoom: 14,
+      onMapClick,
+    });
+
+    const clickHandler = mockOn.mock.calls.find((call) => call[0] === 'click' && typeof call[1] === 'function')?.[1];
+    expect(clickHandler).toBeDefined();
+
+    clickHandler({ lngLat: { lng: -71.3128, lat: 41.4901 } });
+    expect(onMapClick).toHaveBeenCalledWith({ lat: 41.4901, lon: -71.3128 });
+  });
 });

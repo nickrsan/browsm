@@ -49,6 +49,7 @@ export interface SettingsState {
   defaultChangesetCommentPrefix?: string;
   preferredEditor: PreferredEditor;
   messagePollIntervalMinutes?: number;
+  nearbySearchRadius?: number;
 }
 
 /**
@@ -120,6 +121,7 @@ export const DEFAULT_SETTINGS_STATE: SettingsState = {
   defaultChangesetCommentPrefix: 'Surveyed via Browsm',
   preferredEditor: 'id',
   messagePollIntervalMinutes: 10,
+  nearbySearchRadius: 50,
 };
 
 /**

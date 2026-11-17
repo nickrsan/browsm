@@ -159,6 +159,28 @@
           </select>
         </div>
 
+        <!-- Nearby Places Search Radius -->
+        <div class="setting-group">
+          <label class="setting-label" for="quick-radius-input">
+            Nearby Places Search Radius: <strong>{settingsStore.nearbySearchRadius}m</strong>
+          </label>
+          <div class="range-control-row">
+            <input
+              id="quick-radius-input"
+              type="range"
+              min="10"
+              max="500"
+              step="10"
+              value={settingsStore.nearbySearchRadius}
+              oninput={(e) => settingsStore.setNearbySearchRadius(Number((e.target as HTMLInputElement).value))}
+              class="radius-slider"
+              data-testid="quick-radius-slider"
+            />
+            <span class="range-value-label">{settingsStore.nearbySearchRadius}m</span>
+          </div>
+          <p class="setting-helper">Max distance (10m - 500m, default 50m) for nearby OSM candidates.</p>
+        </div>
+
         <!-- Current Target Auth Status -->
         <div class="auth-status-box" data-testid="quick-auth-status">
           <div class="auth-status-title">Target Environment Auth:</div>
@@ -345,6 +367,33 @@
     font-size: 13px;
     background: #ffffff;
     cursor: pointer;
+  }
+
+  .range-control-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .radius-slider {
+    flex: 1;
+    accent-color: #2e7d32;
+    cursor: pointer;
+  }
+
+  .range-value-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #2e7d32;
+    min-width: 44px;
+    text-align: right;
+  }
+
+  .setting-helper {
+    font-size: 11px;
+    color: #616161;
+    margin: 4px 0 0 0;
+    line-height: 1.3;
   }
 
   .auth-status-box {

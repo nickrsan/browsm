@@ -93,6 +93,10 @@ browsm/
   - Purges all cached geocoding records from local storage.
 
 ### Spatial Matcher Service (`src/services/spatial-matcher.ts`)
+- `hasMeaningfulTags(element?: { tags?: Record<string, string> } | null): boolean`
+  - Validates whether an OSM element contains descriptive physical/POI tags, excluding elements with no tags or with only internal metadata keys (`created_by`, `source`, `source:*`, `tiger:*`, `gnis:*`, `attribution`).
+- `filterAndSortNearbyElements(elements: OsmElement[], centerLat?: number, centerLon?: number, maxDistanceMeters?: number): OsmElement[]`
+  - Filters out untagged OSM elements and items beyond the configured search radius (defaulting to 50 meters), prioritizing tagged point nodes before area ways and relations, secondary-sorted by distance.
 - `fetchOsmElementsInBbox(bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number }): Promise<OsmElement[]>`
   - Queries `https://api.openstreetmap.org/api/0.6/map?bbox=...` and parses both standalone `<node>` elements and `<way>` building structures with geometry centroids.
 - `findBestMatch(target: { name?: string; phone?: string; website?: string; lat?: number; lon?: number; osmId?: number | string; osmType?: string }, candidates: OsmElement[]): SpatialMatchResult`

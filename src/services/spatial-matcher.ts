@@ -11,6 +11,84 @@ import { isMinorTagDifference } from '@/services/tag-normalizer';
 const OSM_API_BASE = 'https://api.openstreetmap.org/api/0.6';
 
 /**
+ * Determines whether an OSM element contains meaningful descriptive tags
+ * (excludes elements with no tags or with only internal OSM metadata tags like created_by, source, etc.).
+ */
+export function hasMeaningfulTags(element?: { tags?: Record<string, string> } | null): boolean {
+  if (!element || !element.tags) return false;
+  const meaningfulKeys = Object.keys(element.tags).filter((k) => {
+    const lower = k.toLowerCase().trim();
+    return (
+      lower.length > 0 &&
+      lower !== 'created_by' &&
+      lower !== 'source' &&
+      !lower.startsWith('source:') &&
+      !lower.startsWith('tiger:') &&
+      !lower.startsWith('gnis:') &&
+      lower !== 'attribution'
+    );
+  });
+  return meaningfulKeys.length > 0;
+}
+
+/**
+ * Filters out untagged OSM elements and items beyond the max distance radius,
+ * and sorts candidates prioritizing tagged point nodes before ways and relations,
+ * followed by distance ascending.
+ */
+export function filterAndSortNearbyElements(
+  elements: OsmElement[],
+  centerLat?: number,
+  centerLon?: number,
+  maxDistanceMeters: number = 50
+): OsmElement[] {
+  // 1. Filter out untagged elements
+  const validElements = elements.filter((el) => hasMeaningfulTags(el));
+
+  // 2. Filter by radius if center coordinates are valid
+  const hasCoords =
+    centerLat !== undefined &&
+    centerLon !== undefined &&
+    !Number.isNaN(centerLat) &&
+    !Number.isNaN(centerLon) &&
+    (centerLat !== 0 || centerLon !== 0);
+
+  const withinRadius = hasCoords
+    ? validElements.filter((el) => {
+        const dist = calculateDistanceMeters(centerLat, centerLon, el.lat, el.lon);
+        return dist <= maxDistanceMeters;
+      })
+    : validElements;
+
+  // 3. Sort: Tagged nodes first, then ways/relations, secondary sorted by distance
+  return withinRadius.slice().sort((a, b) => {
+    // Primary hierarchy: node (0) before way/relation (1)
+    const typeRankA = a.type === 'node' ? 0 : 1;
+    const typeRankB = b.type === 'node' ? 0 : 1;
+    if (typeRankA !== typeRankB) {
+      return typeRankA - typeRankB;
+    }
+
+    // Secondary sort: distance ascending (if coordinates provided)
+    if (hasCoords) {
+      const distA = calculateDistanceMeters(centerLat, centerLon, a.lat, a.lon);
+      const distB = calculateDistanceMeters(centerLat, centerLon, b.lat, b.lon);
+      if (Math.abs(distA - distB) > 0.01) {
+        return distA - distB;
+      }
+    }
+
+    // Tertiary sort: alphabetical by name, then ID
+    const nameA = a.tags.name || '';
+    const nameB = b.tags.name || '';
+    if (nameA && nameB && nameA !== nameB) {
+      return nameA.localeCompare(nameB);
+    }
+    return a.id - b.id;
+  });
+}
+
+/**
  * Calculates a bounding box around a coordinate point for a given radius in meters.
  */
 export function calculateBboxAroundCoords(

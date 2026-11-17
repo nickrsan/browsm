@@ -36,7 +36,24 @@ describe('SettingsStore (Svelte 5 Runes)', () => {
     expect(settingsStore.isDevMode).toBe(false);
     expect(settingsStore.preferredEditor).toBe('id');
     expect(settingsStore.messagePollIntervalMinutes).toBe(10);
+    expect(settingsStore.nearbySearchRadius).toBe(50);
     expect(settingsStore.activeEndpointConfig.apiBaseUrl).toBe('https://api.openstreetmap.org/api/0.6');
+  });
+
+  it('updates nearby search radius with clamping and persists to storage', async () => {
+    await settingsStore.setNearbySearchRadius(120);
+    expect(settingsStore.nearbySearchRadius).toBe(120);
+
+    const saved = mockStorage[SETTINGS_STORAGE_KEY] as Record<string, unknown>;
+    expect(saved?.nearbySearchRadius).toBe(120);
+
+    // Clamps minimum to 10
+    await settingsStore.setNearbySearchRadius(2);
+    expect(settingsStore.nearbySearchRadius).toBe(10);
+
+    // Clamps maximum to 500
+    await settingsStore.setNearbySearchRadius(1000);
+    expect(settingsStore.nearbySearchRadius).toBe(500);
   });
 
   it('updates message polling interval and persists to storage', async () => {

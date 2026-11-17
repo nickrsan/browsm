@@ -61,6 +61,10 @@ class SettingsStore {
     return this._state.messagePollIntervalMinutes ?? 10;
   }
 
+  get nearbySearchRadius(): number {
+    return this._state.nearbySearchRadius ?? 50;
+  }
+
   get activeEndpointConfig(): EndpointConfig {
     return getEndpointConfig(this._state.activeEndpointId, this._state.customEndpoint);
   }
@@ -86,6 +90,7 @@ class SettingsStore {
       this._state.defaultChangesetCommentPrefix = loaded.defaultChangesetCommentPrefix;
       this._state.preferredEditor = loaded.preferredEditor;
       this._state.messagePollIntervalMinutes = loaded.messagePollIntervalMinutes ?? 10;
+      this._state.nearbySearchRadius = loaded.nearbySearchRadius ?? 50;
     } catch (err) {
       console.debug('[Browsm] Failed to initialize settings store:', err);
     } finally {
@@ -108,6 +113,7 @@ class SettingsStore {
             this._state.defaultChangesetCommentPrefix = newValue.defaultChangesetCommentPrefix;
             this._state.preferredEditor = newValue.preferredEditor;
             this._state.messagePollIntervalMinutes = newValue.messagePollIntervalMinutes;
+            this._state.nearbySearchRadius = newValue.nearbySearchRadius ?? 50;
           }
         }
       });
@@ -129,6 +135,7 @@ class SettingsStore {
             defaultChangesetCommentPrefix: this._state.defaultChangesetCommentPrefix,
             preferredEditor: this._state.preferredEditor,
             messagePollIntervalMinutes: this._state.messagePollIntervalMinutes,
+            nearbySearchRadius: this._state.nearbySearchRadius,
           })
         );
         await browser.storage.local.set({
@@ -192,6 +199,15 @@ class SettingsStore {
   }
 
   /**
+   * Sets the nearby POI search radius in meters (clamped between 10m and 500m).
+   */
+  async setNearbySearchRadius(radiusMeters: number): Promise<void> {
+    const num = Math.round(Number(radiusMeters)) || 50;
+    this._state.nearbySearchRadius = Math.max(10, Math.min(500, num));
+    await this.persist();
+  }
+
+  /**
    * Resets all settings to default values.
    */
   async resetToDefaults(): Promise<void> {
@@ -201,6 +217,7 @@ class SettingsStore {
     this._state.defaultChangesetCommentPrefix = DEFAULT_SETTINGS_STATE.defaultChangesetCommentPrefix;
     this._state.preferredEditor = DEFAULT_SETTINGS_STATE.preferredEditor;
     this._state.messagePollIntervalMinutes = DEFAULT_SETTINGS_STATE.messagePollIntervalMinutes;
+    this._state.nearbySearchRadius = DEFAULT_SETTINGS_STATE.nearbySearchRadius;
     await this.persist();
   }
 }

@@ -5,6 +5,8 @@ import type {
   UpdateIconPayload,
   ShowMapPayload,
   SchemaDetectedPayload,
+  PageDomainChangedPayload,
+  ResetSidebarPayload,
   SearchPoiPayload,
 } from '../types/messaging';
 
@@ -14,5 +16,7 @@ export const messaging = defineExtensionMessaging<{
   updateIcon(payload: UpdateIconPayload): void;
   showMap(payload: ShowMapPayload): void;
   schemaDetected(payload: SchemaDetectedPayload): void;
+  pageDomainChanged(payload: PageDomainChangedPayload): void;
+  resetSidebar(payload: ResetSidebarPayload): void;
   searchPoi(payload: SearchPoiPayload): void;
 }>();

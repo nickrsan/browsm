@@ -8,6 +8,35 @@ export default defineContentScript({
   main() {
     let lastDetectedPlace: SchemaOrgPlace | null = null;
     let mutationDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let currentHostname = window.location.hostname;
+    let currentHref = window.location.href;
+
+    /**
+     * Checks if the page domain or URL changed (e.g. via client-side routing)
+     * and broadcasts a domain change event to reset sidebar state when leaving a domain.
+     */
+    function checkUrlAndDomainChange() {
+      const newHostname = window.location.hostname;
+      const newHref = window.location.href;
+
+      if (newHostname !== currentHostname) {
+        const previousDomain = currentHostname;
+        currentHostname = newHostname;
+        currentHref = newHref;
+        lastDetectedPlace = null;
+
+        messaging.sendMessage('pageDomainChanged', {
+          previousDomain,
+          newDomain: newHostname,
+          url: newHref,
+        });
+
+        scanForSchema();
+      } else if (newHref !== currentHref) {
+        currentHref = newHref;
+        scanForSchema();
+      }
+    }
 
     /**
      * Scans the document for Schema.org JSON-LD or Microdata POI markup.
@@ -34,11 +63,31 @@ export default defineContentScript({
       }
     }
 
+    // Hook HTML5 history API for single page application (SPA) client-side navigation
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function (...args) {
+      const result = originalPushState.apply(this, args);
+      setTimeout(checkUrlAndDomainChange, 0);
+      return result;
+    };
+
+    history.replaceState = function (...args) {
+      const result = originalReplaceState.apply(this, args);
+      setTimeout(checkUrlAndDomainChange, 0);
+      return result;
+    };
+
+    window.addEventListener('popstate', checkUrlAndDomainChange);
+    window.addEventListener('hashchange', checkUrlAndDomainChange);
+
     // Initial extraction once DOM is idle
     scanForSchema();
 
     // Set up MutationObserver to catch dynamically injected JSON-LD scripts or microdata in SPAs
     const observer = new MutationObserver((mutations) => {
+      checkUrlAndDomainChange();
       let shouldRecheck = false;
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {

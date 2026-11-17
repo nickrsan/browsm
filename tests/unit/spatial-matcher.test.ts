@@ -6,6 +6,8 @@ import {
   parseOsmBboxXml,
   generateTagDiff,
   findBestMatch,
+  hasMeaningfulTags,
+  filterAndSortNearbyElements,
 } from '@/services/spatial-matcher';
 import type { OsmElement } from '@/types/osm';
 
@@ -272,6 +274,129 @@ describe('Spatial Matcher Service', () => {
       const match = findBestMatch({ name: 'New Cafe', lat: 41.49, lon: -71.31 }, []);
       expect(match.matchStatus).toBe('no_match');
       expect(match.matchedElement).toBeUndefined();
+    });
+  });
+
+  describe('Meaningful Tag Filter & Sorting Hierarchy', () => {
+    it('hasMeaningfulTags returns false for elements with empty or internal metadata tags', () => {
+      expect(hasMeaningfulTags(null)).toBe(false);
+      expect(hasMeaningfulTags(undefined)).toBe(false);
+      expect(hasMeaningfulTags({ tags: {} })).toBe(false);
+      expect(hasMeaningfulTags({ tags: { created_by: 'JOSM 1.0' } })).toBe(false);
+      expect(hasMeaningfulTags({ tags: { source: 'bing;survey' } })).toBe(false);
+      expect(hasMeaningfulTags({ tags: { 'source:geometry': 'tiger' } })).toBe(false);
+      expect(hasMeaningfulTags({ tags: { 'tiger:cfcc': 'A41' } })).toBe(false);
+      expect(hasMeaningfulTags({ tags: { attribution: 'USGS' } })).toBe(false);
+    });
+
+    it('hasMeaningfulTags returns true for elements with descriptive POI or physical tags', () => {
+      expect(hasMeaningfulTags({ tags: { name: 'Thames Street Cafe' } })).toBe(true);
+      expect(hasMeaningfulTags({ tags: { amenity: 'pub' } })).toBe(true);
+      expect(hasMeaningfulTags({ tags: { shop: 'bakery' } })).toBe(true);
+      expect(hasMeaningfulTags({ tags: { building: 'commercial', source: 'bing' } })).toBe(true);
+      expect(hasMeaningfulTags({ tags: { tourism: 'hotel' } })).toBe(true);
+    });
+
+    it('filterAndSortNearbyElements filters untagged elements and prioritizes tagged nodes before ways', () => {
+      const testElements: OsmElement[] = [
+        {
+          id: 1,
+          type: 'node',
+          lat: 41.4901,
+          lon: -71.3128,
+          version: 1,
+          tags: {}, // Untagged node -> should be filtered out
+        },
+        {
+          id: 2,
+          type: 'way',
+          lat: 41.49005,
+          lon: -71.3128,
+          version: 1,
+          tags: { created_by: 'Potlatch' }, // Only metadata -> should be filtered out
+        },
+        {
+          id: 3,
+          type: 'node',
+          lat: 41.49018, // ~10m away
+          lon: -71.3128,
+          version: 1,
+          tags: { name: 'Node POI 10m', amenity: 'cafe' },
+        },
+        {
+          id: 4,
+          type: 'way',
+          lat: 41.49014, // ~5m away (closer than node 3, but is a way)
+          lon: -71.3128,
+          version: 1,
+          tags: { name: 'Building Way 5m', building: 'retail' },
+        },
+        {
+          id: 5,
+          type: 'node',
+          lat: 41.49032, // ~25m away
+          lon: -71.3128,
+          version: 1,
+          tags: { name: 'Node POI 25m', shop: 'convenience' },
+        },
+      ];
+
+      const centerLat = 41.4901;
+      const centerLon = -71.3128;
+
+      const result = filterAndSortNearbyElements(testElements, centerLat, centerLon, 50);
+
+      // Verify untagged node #1 and way #2 are excluded
+      expect(result.map((r) => r.id)).not.toContain(1);
+      expect(result.map((r) => r.id)).not.toContain(2);
+
+      // Verify node prioritization over ways:
+      // Node 3 (10m) first, Node 5 (25m) second, Way 4 (5m) third
+      expect(result.map((r) => r.id)).toEqual([3, 5, 4]);
+    });
+
+    it('filterAndSortNearbyElements respects custom maxDistanceMeters search radius', () => {
+      const testElements: OsmElement[] = [
+        {
+          id: 10,
+          type: 'node',
+          lat: 41.49018, // ~10m away
+          lon: -71.3128,
+          version: 1,
+          tags: { name: 'Close Cafe', amenity: 'cafe' },
+        },
+        {
+          id: 20,
+          type: 'node',
+          lat: 41.49045, // ~40m away
+          lon: -71.3128,
+          version: 1,
+          tags: { name: 'Medium Distance Bakery', shop: 'bakery' },
+        },
+        {
+          id: 30,
+          type: 'node',
+          lat: 41.49090, // ~90m away
+          lon: -71.3128,
+          version: 1,
+          tags: { name: 'Far Away Restaurant', amenity: 'restaurant' },
+        },
+      ];
+
+      const centerLat = 41.4901;
+      const centerLon = -71.3128;
+
+      // With 30m radius: only #10 (10m) included
+      const result30 = filterAndSortNearbyElements(testElements, centerLat, centerLon, 30);
+      expect(result30.map((r) => r.id)).toEqual([10]);
+
+      // With 50m radius: #10 (10m) and #20 (40m) included
+      const result50 = filterAndSortNearbyElements(testElements, centerLat, centerLon, 50);
+      expect(result50.map((r) => r.id)).toEqual([10, 20]);
+
+      // With 100m radius: all three included
+      const result100 = filterAndSortNearbyElements(testElements, centerLat, centerLon, 100);
+      expect(result100.map((r) => r.id)).toEqual([10, 20, 30]);
     });
   });
 });

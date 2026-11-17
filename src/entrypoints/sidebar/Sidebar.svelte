@@ -10,7 +10,13 @@
   import { authStore } from '@/stores/auth.svelte';
   import { messaging } from '@/lib/messaging';
   import { convertSchemaPlaceToOsmTags } from '@/services/tag-normalizer';
-  import { generateTagDiff, fetchOsmElementsInBbox, calculateBboxAroundCoords, findBestMatch } from '@/services/spatial-matcher';
+  import {
+    generateTagDiff,
+    fetchOsmElementsInBbox,
+    calculateBboxAroundCoords,
+    findBestMatch,
+    filterAndSortNearbyElements,
+  } from '@/services/spatial-matcher';
   import { launchEditor, type EditorLaunchResult } from '@/services/external-editors';
   import type { NominatimResult, OsmElement } from '@/types/osm';
   import type { EditorWorkflowState } from '@/types/messaging';
@@ -42,6 +48,18 @@
   let lastTimestamp = $state<number>(0);
   let nearbyElementsList = $state<OsmElement[]>([]);
   let detectedPagePlace = $state<SchemaOrgPlace | null>(null);
+
+  /**
+   * Filtered and sorted nearby elements respecting tagged node prioritization and search radius.
+   */
+  let filteredNearbyElements = $derived(
+    filterAndSortNearbyElements(
+      nearbyElementsList,
+      mapCenter[1] !== 0 ? mapCenter[1] : undefined,
+      mapCenter[0] !== 0 ? mapCenter[0] : undefined,
+      settingsStore.nearbySearchRadius
+    )
+  );
 
   /**
    * Staged tag modifications and comparison matrix state
@@ -447,6 +465,27 @@
   }
 
   /**
+   * Resets all sidebar state back to clean initial state when navigating to a new domain or tab.
+   */
+  function resetSidebarState() {
+    status = 'instructions';
+    displayName = '';
+    searchQuery = '';
+    fullResponse = '';
+    selectedElement = null;
+    selectedElementId = null;
+    diffItems = [];
+    stagedTags = {};
+    markers = [];
+    structures = [];
+    nearbyElementsList = [];
+    detectedPagePlace = null;
+    editorFeedback = null;
+    lastOsmResponse = null;
+    mapCenter = [0, 0];
+  }
+
+  /**
    * Registers messaging listeners and initializes storage state with proper teardown.
    */
   $effect(() => {
@@ -476,7 +515,13 @@
         if (storage?.searchSession?.nearbyElements) {
           nearbyElementsList = storage.searchSession.nearbyElements;
         }
-        if (storage?.lookupState) {
+        // Only restore completed response state if coordinates and valid payload exist
+        if (
+          storage?.lookupState &&
+          storage.lookupState.state === 'response' &&
+          storage.lookupState.lat !== undefined &&
+          storage.lookupState.lon !== undefined
+        ) {
           updateFromPayload({
             ...storage.lookupState,
             nearbyElements:
@@ -486,6 +531,9 @@
             matchedElementId:
               storage.lookupState.matchedElementId || storage.searchSession?.matchedElementId,
           });
+        } else {
+          // Never leave sidebar in searching state on cold start
+          status = 'instructions';
         }
       })
       .catch((err) => {
@@ -507,10 +555,20 @@
       }
     });
 
+    const unwatchResetSidebar = messaging.onMessage('resetSidebar', () => {
+      resetSidebarState();
+    });
+
+    const unwatchPageDomainChanged = messaging.onMessage('pageDomainChanged', () => {
+      resetSidebarState();
+    });
+
     return () => {
       unwatchUpdateEditor();
       unwatchAdjustMap();
       unwatchSchema();
+      unwatchResetSidebar();
+      unwatchPageDomainChanged();
     };
   });
 
@@ -721,7 +779,7 @@
           class:active={activeTab === 'nearby'}
           onclick={() => (activeTab = 'nearby')}
         >
-          Nearby Places ({nearbyElementsList.length})
+          Nearby Places ({filteredNearbyElements.length})
         </button>
         <button
           type="button"
@@ -749,11 +807,11 @@
     <!-- Tab 2: Nearby Places & Structures -->
     {#if activeTab === 'nearby'}
       <div class="nearby-section">
-        {#if nearbyElementsList.length === 0}
-          <p class="text-muted">No nearby OSM nodes or structures found within 50 meters.</p>
+        {#if filteredNearbyElements.length === 0}
+          <p class="text-muted">No nearby tagged OSM places found within {settingsStore.nearbySearchRadius} meters.</p>
         {:else}
           <div class="nearby-cards-grid">
-            {#each nearbyElementsList as elem (elem.id)}
+            {#each filteredNearbyElements as elem (elem.id)}
               {@const isSelected = selectedElementId === elem.id}
               <div
                 class="nearby-element-card"

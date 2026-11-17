@@ -221,4 +221,75 @@ describe('Sidebar.svelte (Svelte 5 Workspace)', () => {
     // The polling effect should not execute more than once on mount
     expect(refreshSpy.mock.calls.length).toBeLessThanOrEqual(1);
   });
+
+  it('does not display searching indicator on cold start when storage contains stale searching state', async () => {
+    // @ts-ignore
+    globalThis.browser.storage.local.get = vi.fn().mockResolvedValue({
+      lookupState: {
+        state: 'searching',
+        timestamp: Date.now() - 60000,
+      },
+    });
+
+    const { container } = render(Sidebar);
+
+    await waitFor(() => {
+      // Must not render searching notice or map
+      expect(container.querySelector('#searching')).toBeNull();
+      expect(screen.queryByText(/Querying OpenStreetMap/i)).not.toBeInTheDocument();
+      // Should show instructions card
+      expect(screen.getByText(/How to use Browsm:/i)).toBeInTheDocument();
+    });
+  });
+
+  it('resets sidebar state to clean instructions on pageDomainChanged message', async () => {
+    // Intercept messaging.onMessage to capture registered handlers
+    const registeredHandlers: Record<string, (msg: any) => void> = {};
+    const originalOnMessage = messaging.onMessage;
+    vi.spyOn(messaging, 'onMessage').mockImplementation(((type: string, handler: any) => {
+      registeredHandlers[type] = handler;
+      return () => {
+        delete registeredHandlers[type];
+      };
+    }) as any);
+
+    // Start with a loaded response state in storage
+    // @ts-ignore
+    globalThis.browser.storage.local.get = vi.fn().mockResolvedValue({
+      lookupState: {
+        state: 'response',
+        lat: 41.4901,
+        lon: -71.3128,
+        display_name: 'Stale Domain POI',
+        osm_id: '123456',
+        full_response: { display_name: 'Stale Domain POI' },
+      },
+      currentSchema: {
+        name: 'Stale Place',
+        type: 'Restaurant',
+      },
+    });
+
+    const { container } = render(Sidebar);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 2, name: /Stale Place/i })).toBeInTheDocument();
+    });
+
+    // Invoke captured pageDomainChanged handler
+    expect(registeredHandlers['pageDomainChanged']).toBeDefined();
+    registeredHandlers['pageDomainChanged']({
+      data: {
+        previousDomain: 'old-site.com',
+        newDomain: 'new-site.com',
+        url: 'https://new-site.com',
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { level: 2, name: /Stale Place/i })).not.toBeInTheDocument();
+      expect(screen.getByText(/How to use Browsm:/i)).toBeInTheDocument();
+      expect(container.querySelector('.map-section')).toBeNull();
+    });
+  });
 });

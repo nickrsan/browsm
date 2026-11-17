@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "User-Agent",
+          "operation": "set",
+          "value": "Browsm1.0"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "https://nominatim.openstreetmap.org/*",
+      "resourceTypes": ["xmlhttprequest", "sub_frame"]
+    }
+  }
+]
