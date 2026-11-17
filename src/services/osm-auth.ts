@@ -182,6 +182,7 @@ export async function getStoredAuthState(endpointId: string = 'osm-prod'): Promi
 
 /**
  * Saves the OSM authentication state for a specific endpoint to browser local storage.
+ * Ensures the state is cloned to a plain object to prevent DataCloneError with Svelte 5 Proxies.
  */
 export async function saveStoredAuthState(
   state: OsmAuthState,
@@ -190,7 +191,9 @@ export async function saveStoredAuthState(
   const storageKey = getAuthStorageKey(endpointId);
   try {
     if (typeof browser !== 'undefined' && browser.storage?.local) {
-      await browser.storage.local.set({ [storageKey]: state });
+      // Deep clone to a plain POJO to avoid DataCloneError with Svelte 5 reactive Proxies in Firefox
+      const plainState: OsmAuthState = JSON.parse(JSON.stringify(state));
+      await browser.storage.local.set({ [storageKey]: plainState });
     }
   } catch (err) {
     console.debug(`[Browsm] Error saving auth state for ${endpointId} to storage:`, err);

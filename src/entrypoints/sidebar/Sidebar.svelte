@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import MapLibreMap from '@/components/MapLibreMap.svelte';
   import AuthHeader from '@/components/AuthHeader.svelte';
   import NoteModal from '@/components/NoteModal.svelte';
@@ -516,30 +516,33 @@
 
   /**
    * Periodic OSM user messages checking while the sidebar is open.
-   * Checks immediately on mount / authentication and polls at the user-configured interval.
+   * Checks on mount or authentication change, and polls at the user-configured interval.
+   * Uses `untrack` to prevent store state mutations from re-triggering the effect synchronously.
    * Automatically clears timer when the sidebar is unmounted or closed.
    */
   $effect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
     const intervalMinutes = settingsStore.messagePollIntervalMinutes ?? 10;
+    const isAuthenticated = authStore.isAuthenticated;
+    const activeTarget = authStore.activeTargetId;
 
-    const checkMessages = async () => {
-      if (authStore.isAuthenticated && authStore.token?.accessToken) {
-        try {
-          await authStore.refreshUserDetails();
-        } catch (err) {
-          console.debug('[Browsm] Periodic message polling error:', err);
+    const poll = async () => {
+      untrack(() => {
+        if (authStore.isAuthenticated && authStore.token?.accessToken) {
+          authStore.refreshUserDetails(activeTarget).catch((err) => {
+            console.debug('[Browsm] Periodic message polling error:', err);
+          });
         }
-      }
+      });
     };
 
-    if (authStore.isAuthenticated) {
-      checkMessages();
+    if (isAuthenticated) {
+      poll();
     }
 
-    if (intervalMinutes > 0) {
+    if (isAuthenticated && intervalMinutes > 0) {
       const intervalMs = intervalMinutes * 60 * 1000;
-      timer = setInterval(checkMessages, intervalMs);
+      timer = setInterval(poll, intervalMs);
     }
 
     return () => {

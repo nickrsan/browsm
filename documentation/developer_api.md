@@ -106,7 +106,7 @@ browsm/
 - `getStoredAuthState(endpointId?: string): Promise<OsmAuthState>`
   - Retrieves stored auth state for a specific endpoint with transparent legacy key migration.
 - `saveStoredAuthState(state: OsmAuthState, endpointId?: string): Promise<void>`
-  - Persists token and profile details under endpoint-isolated storage key.
+  - Persists token and profile details under endpoint-isolated storage key, deep-cloning to a plain POJO to avoid Firefox `DataCloneError` on Svelte 5 reactive Proxies.
 - `clearStoredAuthState(endpointId?: string): Promise<void>`
   - Clears credentials for the specified endpoint.
 - `getAllStoredAuthStates(): Promise<Record<string, OsmAuthState>>`
@@ -149,6 +149,7 @@ browsm/
   - `resetToDefaults()`: Restores factory configuration.
 
 ### OSM API 0.6 Client (`src/services/osm-api.ts`)
+- `OsmApiError`: Specialized Error class containing HTTP `status` code metadata for rate-limiting and authentication error handling.
 - `getUserDetails(accessToken: string, baseUrl?: string, customFetch?: typeof fetch): Promise<OsmUserDetails>`
   - Queries `GET /api/0.6/user/details` and parses user profile, changeset count, roles, and message statistics (`unreadMessagesCount`, `totalMessagesCount`).
 - `checkUserMessages(accessToken: string, baseUrl?: string, customFetch?: typeof fetch): Promise<{ unreadCount: number; totalCount: number }>`
@@ -182,7 +183,12 @@ browsm/
   - `token`: `OsmAuthToken | undefined`
   - `login()`: Initiates OAuth 2.0 PKCE flow.
   - `logout()`: Clears credentials and resets state.
-  - `refreshUserDetails(endpointId?, customFetch?)`: Fetches fresh user details and unread message count from the OSM API, synchronizing reactive state and storage.
+  - `refreshUserDetails(endpointId?, customFetch?, force?)`: Fetches fresh user details and unread message count from the OSM API with:
+    - **In-flight request deduplication**: Reuses pending promises across simultaneous callers.
+    - **Cooldown throttling**: Enforces a minimum 30-second interval between API calls unless `force=true`.
+    - **Exponential error backoff**: Automatically backs off (1m, 2m, 4m, 8m, up to 15m) on repeated failures.
+    - **HTTP 429 protection**: Enforces a 5-minute backoff upon receiving rate limit responses.
+    - **Change detection**: Only triggers Svelte reactivity and storage writes if user metadata has changed.
   - `init()`: Restores authentication state from local storage.
 
 ---

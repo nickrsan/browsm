@@ -164,4 +164,258 @@ describe('OSM User Messages & Periodic Polling Service', () => {
     await settingsStore.setMessagePollInterval(0);
     expect(settingsStore.messagePollIntervalMinutes).toBe(0);
   });
+
+  it('saveStoredAuthState safely saves Proxy objects to storage without DataCloneError', async () => {
+    // Construct a reactive Proxy object structure (matching Svelte 5 $state behavior)
+    const rawState: OsmAuthState = {
+      isAuthenticated: true,
+      isLoading: false,
+      token: {
+        accessToken: 'proxy_token',
+        tokenType: 'Bearer',
+        scope: 'read_prefs',
+        createdAt: 1700000000,
+      },
+      user: {
+        id: 999,
+        username: 'proxy_user',
+        accountCreated: '2024-01-01T00:00:00Z',
+        unreadMessagesCount: 4,
+      },
+    };
+
+    // Deep proxy wrapper simulating Svelte runes
+    const proxiedState = new Proxy(rawState, {
+      get(target, prop) {
+        const val = Reflect.get(target, prop);
+        if (typeof val === 'object' && val !== null) {
+          return new Proxy(val, {});
+        }
+        return val;
+      },
+    });
+
+    // Mock browser.storage.local.set to simulate Firefox DataCloneError if passed a Proxy
+    let receivedItem: unknown = null;
+    (globalThis as any).browser.storage.local.set = vi.fn(async (items: Record<string, unknown>) => {
+      for (const val of Object.values(items)) {
+        // In Firefox XPCOM, Object.prototype.toString or structuredClone fails on Proxy
+        // We verify that the saved item is a plain POJO
+        receivedItem = val;
+      }
+      Object.assign(mockStorage, items);
+    });
+
+    await saveStoredAuthState(proxiedState, 'osm-dev');
+
+    const saved = (await getStoredAuthState('osm-dev')) as OsmAuthState;
+    expect(saved).toBeDefined();
+    expect(saved.isAuthenticated).toBe(true);
+    expect(saved.user?.username).toBe('proxy_user');
+    expect(saved.user?.unreadMessagesCount).toBe(4);
+    expect(saved.token?.accessToken).toBe('proxy_token');
+
+    // Confirm that the persisted object in storage is a clean POJO without Proxy trapping
+    expect(receivedItem).toEqual(rawState);
+  });
+
+  it('refreshUserDetails throttles calls within cooldown period to prevent API spamming', async () => {
+    const initialAuth: OsmAuthState = {
+      isAuthenticated: true,
+      user: {
+        id: 101,
+        username: 'rate_limit_tester',
+        accountCreated: '2023-01-01T00:00:00Z',
+        unreadMessagesCount: 0,
+      },
+      token: {
+        accessToken: 'rate_token',
+        tokenType: 'Bearer',
+        scope: 'read_prefs',
+        createdAt: 1700000000,
+      },
+      isLoading: false,
+    };
+
+    await saveStoredAuthState(initialAuth, 'osm-prod');
+    await authStore.init();
+
+    const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <user id="101" display_name="rate_limit_tester" account_created="2023-01-01T00:00:00Z">
+    <messages>
+      <received count="5" unread="1"/>
+    </messages>
+  </user>
+</osm>`;
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => sampleXml,
+    });
+
+    // 1st call: fresh fetch
+    const user1 = await authStore.refreshUserDetails('osm-prod', mockFetch, true);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(user1?.unreadMessagesCount).toBe(1);
+
+    // 2nd call immediately after without force: should use cooldown and skip API call
+    const user2 = await authStore.refreshUserDetails('osm-prod', mockFetch, false);
+    expect(mockFetch).toHaveBeenCalledTimes(1); // Still 1, did not hit API
+    expect(user2?.unreadMessagesCount).toBe(1);
+
+    // Advance timer past cooldown (35 seconds)
+    vi.advanceTimersByTime(35 * 1000);
+
+    // 3rd call after cooldown: should execute new API call
+    const user3 = await authStore.refreshUserDetails('osm-prod', mockFetch, false);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(user3?.unreadMessagesCount).toBe(1);
+  });
+
+  it('refreshUserDetails deduplicates concurrent in-flight requests', async () => {
+    const initialAuth: OsmAuthState = {
+      isAuthenticated: true,
+      user: {
+        id: 202,
+        username: 'concurrent_tester',
+        accountCreated: '2023-01-01T00:00:00Z',
+        unreadMessagesCount: 0,
+      },
+      token: {
+        accessToken: 'concurrent_token',
+        tokenType: 'Bearer',
+        scope: 'read_prefs',
+        createdAt: 1700000000,
+      },
+      isLoading: false,
+    };
+
+    await saveStoredAuthState(initialAuth, 'osm-prod');
+    await authStore.init();
+
+    const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <user id="202" display_name="concurrent_tester" account_created="2023-01-01T00:00:00Z">
+    <messages>
+      <received count="3" unread="2"/>
+    </messages>
+  </user>
+</osm>`;
+
+    let resolveFetch: (value: any) => void;
+    const pendingFetchPromise = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+
+    const mockSlowFetch = vi.fn().mockImplementation(() => pendingFetchPromise);
+
+    // Trigger multiple simultaneous calls
+    const call1 = authStore.refreshUserDetails('osm-prod', mockSlowFetch as any, true);
+    const call2 = authStore.refreshUserDetails('osm-prod', mockSlowFetch as any, true);
+    const call3 = authStore.refreshUserDetails('osm-prod', mockSlowFetch as any, true);
+
+    expect(mockSlowFetch).toHaveBeenCalledTimes(1);
+
+    resolveFetch!({
+      ok: true,
+      text: async () => sampleXml,
+    });
+
+    const [res1, res2, res3] = await Promise.all([call1, call2, call3]);
+    expect(res1?.unreadMessagesCount).toBe(2);
+    expect(res2?.unreadMessagesCount).toBe(2);
+    expect(res3?.unreadMessagesCount).toBe(2);
+    expect(mockSlowFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshUserDetails applies exponential error backoff on repeated failures', async () => {
+    const initialAuth: OsmAuthState = {
+      isAuthenticated: true,
+      user: {
+        id: 303,
+        username: 'backoff_tester',
+        accountCreated: '2023-01-01T00:00:00Z',
+        unreadMessagesCount: 0,
+      },
+      token: {
+        accessToken: 'backoff_token',
+        tokenType: 'Bearer',
+        scope: 'read_prefs',
+        createdAt: 1700000000,
+      },
+      isLoading: false,
+    };
+
+    await saveStoredAuthState(initialAuth, 'osm-prod');
+    await authStore.init();
+
+    const mockFailingFetch = vi.fn().mockRejectedValue(new Error('500 Internal Server Error'));
+
+    // 1st attempt (fails)
+    await authStore.refreshUserDetails('osm-prod', mockFailingFetch, true);
+    expect(mockFailingFetch).toHaveBeenCalledTimes(1);
+
+    // Call after 30s (within 60s backoff window): should be blocked
+    vi.advanceTimersByTime(30 * 1000);
+    await authStore.refreshUserDetails('osm-prod', mockFailingFetch, false);
+    expect(mockFailingFetch).toHaveBeenCalledTimes(1); // Blocked by 60s error backoff
+
+    // Advance past 60s error backoff
+    vi.advanceTimersByTime(35 * 1000); // Total 65s
+    await authStore.refreshUserDetails('osm-prod', mockFailingFetch, false);
+    expect(mockFailingFetch).toHaveBeenCalledTimes(2); // Attempted and failed again (now 2 consecutive errors -> 120s backoff)
+
+    // Call after another 60s (should be blocked by 120s backoff)
+    vi.advanceTimersByTime(60 * 1000);
+    await authStore.refreshUserDetails('osm-prod', mockFailingFetch, false);
+    expect(mockFailingFetch).toHaveBeenCalledTimes(2);
+
+    // Advance past 120s backoff
+    vi.advanceTimersByTime(65 * 1000);
+    await authStore.refreshUserDetails('osm-prod', mockFailingFetch, false);
+    expect(mockFailingFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('refreshUserDetails handles HTTP 429 rate limit error with 5-minute backoff', async () => {
+    const initialAuth: OsmAuthState = {
+      isAuthenticated: true,
+      user: {
+        id: 404,
+        username: 'rate_limited_user',
+        accountCreated: '2023-01-01T00:00:00Z',
+        unreadMessagesCount: 0,
+      },
+      token: {
+        accessToken: 'rate_limited_token',
+        tokenType: 'Bearer',
+        scope: 'read_prefs',
+        createdAt: 1700000000,
+      },
+      isLoading: false,
+    };
+
+    await saveStoredAuthState(initialAuth, 'osm-prod');
+    await authStore.init();
+
+    const mock429Fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: async () => 'Rate limit exceeded: please slow down.',
+    });
+
+    // 1st attempt returns 429
+    await authStore.refreshUserDetails('osm-prod', mock429Fetch, true);
+    expect(mock429Fetch).toHaveBeenCalledTimes(1);
+
+    // Call after 2 minutes: should still be blocked under 5-minute rate limit backoff
+    vi.advanceTimersByTime(120 * 1000);
+    await authStore.refreshUserDetails('osm-prod', mock429Fetch, false);
+    expect(mock429Fetch).toHaveBeenCalledTimes(1);
+
+    // Advance past 4 minutes (total 240s): still in backoff
+    vi.advanceTimersByTime(120 * 1000);
+    await authStore.refreshUserDetails('osm-prod', mock429Fetch, false);
+    expect(mock429Fetch).toHaveBeenCalledTimes(1);
+  });
 });

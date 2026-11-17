@@ -201,4 +201,24 @@ describe('Sidebar.svelte (Svelte 5 Workspace)', () => {
       expect(screen.queryByRole('heading', { level: 2, name: /Quick Settings/i })).not.toBeInTheDocument();
     });
   });
+
+  it('does not trigger a cascading loop when refreshing user details in message polling', async () => {
+    const { authStore } = await import('@/stores/auth.svelte');
+    const refreshSpy = vi.spyOn(authStore, 'refreshUserDetails').mockResolvedValue({
+      id: 888,
+      username: 'non_looping_user',
+      accountCreated: '2023-01-01T00:00:00Z',
+      unreadMessagesCount: 1,
+    });
+
+    render(Sidebar);
+
+    // Allow effects and microtasks to settle
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Browsm');
+    });
+
+    // The polling effect should not execute more than once on mount
+    expect(refreshSpy.mock.calls.length).toBeLessThanOrEqual(1);
+  });
 });

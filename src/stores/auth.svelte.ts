@@ -28,6 +28,21 @@ class AuthStore {
   private _isLoading = $state<boolean>(true);
   private _error = $state<string | undefined>(undefined);
 
+  // In-flight promise tracking per endpoint to avoid duplicate concurrent API calls
+  private _inFlightRefresh = new Map<string, Promise<OsmUserDetails | undefined>>();
+  // Timestamp of last fetch attempt per endpoint for rate limiting
+  private _lastFetchTime = new Map<string, number>();
+  // Timestamp until which API requests are blocked due to HTTP 429 rate limits
+  private _rateLimitResetTime = new Map<string, number>();
+  // Consecutive error counter per endpoint for exponential backoff
+  private _consecutiveErrors = new Map<string, number>();
+
+  // Cooldown and rate-limiting constants
+  private readonly MIN_REFRESH_INTERVAL_MS = 30 * 1000; // 30s minimum interval between successful polls
+  private readonly BASE_ERROR_BACKOFF_MS = 60 * 1000; // 1m base backoff on errors
+  private readonly MAX_ERROR_BACKOFF_MS = 15 * 60 * 1000; // 15m maximum backoff
+  private readonly RATE_LIMIT_429_BACKOFF_MS = 5 * 60 * 1000; // 5m backoff on HTTP 429
+
   constructor() {
     this.init();
     this.setupStorageListener();
@@ -91,7 +106,10 @@ class AuthStore {
     try {
       this._isLoading = true;
       const allStates = await getAllStoredAuthStates();
-      this._authStates = allStates;
+      // Only assign if states differ to prevent unnecessary Svelte reactive cascades
+      if (JSON.stringify(this._authStates) !== JSON.stringify(allStates)) {
+        this._authStates = allStates;
+      }
       this._error = undefined;
     } catch (err) {
       this._error = err instanceof Error ? err.message : String(err);
@@ -147,6 +165,10 @@ class AuthStore {
         ...this._authStates,
         [targetId]: authResult,
       };
+      // Reset rate-limiting trackers on successful login
+      this._consecutiveErrors.set(targetId, 0);
+      this._lastFetchTime.set(targetId, Date.now());
+      this._rateLimitResetTime.delete(targetId);
     } catch (err) {
       this._error = err instanceof Error ? err.message : String(err);
       throw err;
@@ -158,31 +180,112 @@ class AuthStore {
   /**
    * Refreshes user profile details (including changeset count and unread messages count)
    * from the OSM API for the active or specified endpoint and updates persistent state.
+   * Features in-flight deduplication, cooldown throttling, and exponential error backoff.
    */
-  async refreshUserDetails(endpointId?: string, customFetch: typeof fetch = fetch): Promise<OsmUserDetails | undefined> {
+  async refreshUserDetails(
+    endpointId?: string,
+    customFetch: typeof fetch = fetch,
+    force: boolean = false
+  ): Promise<OsmUserDetails | undefined> {
     const targetId = endpointId || this.activeTargetId;
     const currentState = this.getAuthStateFor(targetId);
     if (!currentState.isAuthenticated || !currentState.token?.accessToken) {
       return undefined;
     }
 
-    const endpointConfig = getEndpointConfig(targetId, settingsStore.customEndpoint);
-    try {
-      const updatedUser = await getUserDetails(currentState.token.accessToken, endpointConfig.apiBaseUrl, customFetch);
-      const updatedState: OsmAuthState = {
-        ...currentState,
-        user: updatedUser,
-      };
-      this._authStates = {
-        ...this._authStates,
-        [targetId]: updatedState,
-      };
-      await saveStoredAuthState(updatedState, targetId);
-      return updatedUser;
-    } catch (err) {
-      console.debug(`[Browsm] Failed to refresh user details for ${targetId}:`, err);
+    // 1. In-flight request deduplication: reuse running promise if already pending
+    const inFlight = this._inFlightRefresh.get(targetId);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    // 2. Cooldown and exponential error backoff rate limiting
+    const now = Date.now();
+    const lastFetch = this._lastFetchTime.get(targetId) || 0;
+    const rateLimitUntil = this._rateLimitResetTime.get(targetId) || 0;
+    const errors = this._consecutiveErrors.get(targetId) || 0;
+
+    // Check if under HTTP 429 rate limit backoff
+    if (!force && now < rateLimitUntil) {
       return currentState.user;
     }
+
+    let requiredCooldown = this.MIN_REFRESH_INTERVAL_MS;
+    if (errors > 0) {
+      // Exponential backoff: 1m, 2m, 4m, 8m, up to 15m max
+      requiredCooldown = Math.min(
+        this.BASE_ERROR_BACKOFF_MS * Math.pow(2, errors - 1),
+        this.MAX_ERROR_BACKOFF_MS
+      );
+    }
+
+    if (!force && now - lastFetch < requiredCooldown) {
+      // Within cooldown period: return cached user data to prevent API abuse
+      return currentState.user;
+    }
+
+    const endpointConfig = getEndpointConfig(targetId, settingsStore.customEndpoint);
+    const accessToken = currentState.token.accessToken;
+
+    const refreshPromise = (async () => {
+      try {
+        const updatedUser = await getUserDetails(
+          accessToken,
+          endpointConfig.apiBaseUrl,
+          customFetch
+        );
+
+        // Reset error counters on successful fetch
+        this._consecutiveErrors.set(targetId, 0);
+        this._lastFetchTime.set(targetId, Date.now());
+
+        // Check if user details have changed before triggering reactivity and storage write
+        const prevUser = currentState.user;
+        const hasChanged =
+          !prevUser ||
+          prevUser.unreadMessagesCount !== updatedUser.unreadMessagesCount ||
+          prevUser.totalMessagesCount !== updatedUser.totalMessagesCount ||
+          prevUser.changesetCount !== updatedUser.changesetCount ||
+          prevUser.username !== updatedUser.username ||
+          prevUser.description !== updatedUser.description ||
+          prevUser.img !== updatedUser.img;
+
+        if (hasChanged) {
+          const updatedState: OsmAuthState = {
+            ...currentState,
+            user: updatedUser,
+          };
+          this._authStates = {
+            ...this._authStates,
+            [targetId]: updatedState,
+          };
+          await saveStoredAuthState(updatedState, targetId);
+        }
+
+        return updatedUser;
+      } catch (err: any) {
+        const errorCount = (this._consecutiveErrors.get(targetId) || 0) + 1;
+        this._consecutiveErrors.set(targetId, errorCount);
+        this._lastFetchTime.set(targetId, Date.now());
+
+        if (err?.status === 429 || (typeof err?.message === 'string' && err.message.includes('429'))) {
+          console.warn(`[Browsm] OSM API rate limit encountered for ${targetId}. Backing off for 5 minutes.`);
+          this._rateLimitResetTime.set(targetId, Date.now() + this.RATE_LIMIT_429_BACKOFF_MS);
+          this._consecutiveErrors.set(targetId, Math.max(errorCount, 3));
+        } else if (err?.status === 401 || (typeof err?.message === 'string' && err.message.includes('401'))) {
+          console.warn(`[Browsm] Authentication token for ${targetId} appears invalid or expired.`);
+        } else {
+          console.debug(`[Browsm] Failed to refresh user details for ${targetId} (attempt ${errorCount}):`, err);
+        }
+
+        return currentState.user;
+      } finally {
+        this._inFlightRefresh.delete(targetId);
+      }
+    })();
+
+    this._inFlightRefresh.set(targetId, refreshPromise);
+    return refreshPromise;
   }
 
   /**
@@ -197,6 +300,10 @@ class AuthStore {
         ...this._authStates,
         [targetId]: { isAuthenticated: false, isLoading: false },
       };
+      this._inFlightRefresh.delete(targetId);
+      this._consecutiveErrors.delete(targetId);
+      this._lastFetchTime.delete(targetId);
+      this._rateLimitResetTime.delete(targetId);
       this._error = undefined;
     } catch (err) {
       this._error = err instanceof Error ? err.message : String(err);

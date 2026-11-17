@@ -60,6 +60,19 @@ export function serializeTagsXml(tags: OsmTags): string {
 }
 
 /**
+ * Custom error class for OpenStreetMap API errors with HTTP status codes.
+ */
+export class OsmApiError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'OsmApiError';
+    this.status = status;
+  }
+}
+
+/**
  * Fetches authenticated user profile details from GET /api/0.6/user/details.
  */
 export async function getUserDetails(
@@ -79,7 +92,7 @@ export async function getUserDetails(
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Failed to fetch OSM user details (HTTP ${response.status}): ${errText}`);
+    throw new OsmApiError(`Failed to fetch OSM user details (HTTP ${response.status}): ${errText}`, response.status);
   }
 
   const xmlText = await response.text();

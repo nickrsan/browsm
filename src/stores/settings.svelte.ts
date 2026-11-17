@@ -116,19 +116,23 @@ class SettingsStore {
 
   /**
    * Persists current settings to browser storage.
+   * Serializes to plain JSON object to prevent DataCloneError with Svelte 5 Proxies in Firefox.
    */
   private async persist(): Promise<void> {
     try {
       if (typeof browser !== 'undefined' && browser.storage?.local) {
-        await browser.storage.local.set({
-          [SETTINGS_STORAGE_KEY]: {
+        const plainSettings = JSON.parse(
+          JSON.stringify({
             activeEndpointId: this._state.activeEndpointId,
             devModeRouting: this._state.devModeRouting,
             customEndpoint: this._state.customEndpoint,
             defaultChangesetCommentPrefix: this._state.defaultChangesetCommentPrefix,
             preferredEditor: this._state.preferredEditor,
             messagePollIntervalMinutes: this._state.messagePollIntervalMinutes,
-          },
+          })
+        );
+        await browser.storage.local.set({
+          [SETTINGS_STORAGE_KEY]: plainSettings,
         });
       }
     } catch (err) {
