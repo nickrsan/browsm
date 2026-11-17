@@ -69,18 +69,26 @@ When a location is selected or searched, Browsm compares the extracted webpage m
 1. **Side-by-Side Review**: A 4-column matrix displays `OSM Tag Key`, `Webpage Source`, `Live OSM Value`, and `Staged Value`.
 2. **Visual Status Badges**:
    - 🟢 `Matches OSM`: Webpage and live OpenStreetMap data are in sync.
+   - 🔘 `Minor Diff`: Cosmetic/formatting difference (such as a trailing slash in a URL or phone number punctuation) where the semantic value is identical; OSM value is preserved and faded back by default.
    - 🟡 `Missing in OSM`: Webpage contains verified information (e.g. phone number or website) not currently on the map.
    - 🔵 `Outdated / Different`: Webpage data differs from the existing OSM tag.
    - 🟣 `Staged`: Value has been modified or added for the upcoming changeset.
-3. **1-Click Merge & Reset**:
+3. **3-Tier Intelligent Sorting**:
+   - **Top**: Tags with staged modifications ready for commit.
+   - **Middle**: Tags with minor or ignored differences.
+   - **Bottom**: Unmodified and identical tags.
+4. **Source Provenance Badges & Verification Notes**:
+   - Tags display origin badges (`🏷️ Schema.org`, `🏷️ Microdata`, `🏷️ OpenGraph`, `🔍 Search`) indicating where the data was parsed.
+   - When opening hours originate from embedded Schema.org JSON-LD markup, an advisory notice (`⚠️ Embedded schema hours: verify against page text`) reminds contributors to check the structured metadata against hours visibly rendered on the webpage.
+5. **1-Click Merge & Reset**:
    - Click `→ Copy` next to any webpage value to stage it immediately.
    - Click `↺ Revert` to restore the original live OSM value.
    - Click **"Apply All Suggested"** to copy all missing and updated tags from the page at once.
    - Click **"Reset All"** to discard all staged edits.
-4. **Inline Editing & Real-Time Validation**:
+6. **Inline Editing & Real-Time Validation**:
    - Type directly into the staged value box to customize tags.
    - Real-time warnings alert you to format issues (e.g. international phone formats with country codes, website URL prefixes, valid wheelchair tag values).
-5. **Adding Custom Tags**:
+7. **Adding Custom Tags**:
    - Use the **"Add Custom Tag"** panel at the bottom of the matrix.
    - Built-in autocomplete suggests recommended OSM keys (`cuisine`, `wheelchair`, `operator`, `brand`, `delivery`, `takeaway`, etc.).
 

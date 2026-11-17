@@ -6,6 +6,7 @@
 
 import type { OsmElement, OsmTags, LatLon } from '@/types/osm';
 import type { SpatialMatchResult, TagDiffItem, TagDiffStatus } from '@/types/diff';
+import { isMinorTagDifference } from '@/services/tag-normalizer';
 
 const OSM_API_BASE = 'https://api.openstreetmap.org/api/0.6';
 
@@ -251,7 +252,9 @@ export async function fetchOsmElementsInBbox(
  */
 export function generateTagDiff(
   sourceTags: Record<string, string>,
-  targetElement?: OsmElement
+  targetElement?: OsmElement,
+  sourceOrigin?: 'schema_org' | 'microdata' | 'opengraph' | 'page_text' | 'manual_search' | 'custom' | string,
+  sourceNote?: string
 ): TagDiffItem[] {
   const osmTags = targetElement?.tags || {};
   const allKeys = new Set([...Object.keys(sourceTags), ...Object.keys(osmTags)]);
@@ -268,6 +271,10 @@ export function generateTagDiff(
     if (sourceVal && osmVal) {
       if (sourceVal === osmVal) {
         status = 'identical';
+        action = 'ignore';
+        stagedValue = osmVal;
+      } else if (isMinorTagDifference(key, sourceVal, osmVal)) {
+        status = 'minor_difference';
         action = 'ignore';
         stagedValue = osmVal;
       } else {
@@ -293,12 +300,43 @@ export function generateTagDiff(
       stagedValue,
       status,
       action,
+      sourceOrigin: sourceVal ? sourceOrigin : undefined,
+      sourceNote: sourceVal ? sourceNote : undefined,
     });
   }
 
-  // Sort diffs: primary tags (name, amenity/shop) first, then address tags, then others
+  // Sort diffs:
+  // 1. Items with staged changes at the top (action != 'ignore' and stagedValue != osmValue)
+  // 2. Items with ignored differences or minor differences next
+  // 3. Items with no changes / identical last
   diffs.sort((a, b) => {
-    const priorityKeys = ['name', 'amenity', 'shop', 'tourism', 'addr:housenumber', 'addr:street', 'phone', 'website'];
+    const getTier = (item: TagDiffItem): number => {
+      const isModified = item.stagedValue !== (item.osmValue || '');
+      if (isModified && item.action !== 'ignore') return 1;
+      if (
+        item.status === 'minor_difference' ||
+        (item.sourceValue && item.osmValue && item.sourceValue !== item.osmValue && item.action === 'ignore')
+      ) {
+        return 2;
+      }
+      return 3;
+    };
+
+    const tierA = getTier(a);
+    const tierB = getTier(b);
+    if (tierA !== tierB) return tierA - tierB;
+
+    const priorityKeys = [
+      'name',
+      'amenity',
+      'shop',
+      'tourism',
+      'addr:housenumber',
+      'addr:street',
+      'phone',
+      'website',
+      'opening_hours',
+    ];
     const idxA = priorityKeys.indexOf(a.key);
     const idxB = priorityKeys.indexOf(b.key);
     if (idxA !== -1 && idxB !== -1) return idxA - idxB;

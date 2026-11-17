@@ -31,29 +31,71 @@
   let newTagValue = $state<string>('');
   let newTagWarning = $state<string | undefined>(undefined);
 
-  // Filtered diff items
-  const filteredItems = $derived(
-    diffItems.filter((item) => {
-      // Category filter
-      if (filterCategory === 'modified') {
-        const isModified = item.stagedValue !== (item.osmValue || '');
-        if (!isModified) return false;
-      } else if (filterCategory === 'missing') {
-        if (item.status !== 'missing_in_osm' && item.status !== 'new_in_page') return false;
-      } else if (filterCategory === 'identical') {
-        if (item.status !== 'identical') return false;
-      }
+  // Helper to determine the sorting tier:
+  // Tier 1: Staged changes ready for commit (action is apply or custom and value changed)
+  // Tier 2: Ignored differences or minor formatting differences
+  // Tier 3: No changes / Identical
+  function getTier(item: TagDiffItem): number {
+    const isModified = item.stagedValue !== (item.osmValue || '');
+    if (isModified && item.action !== 'ignore') {
+      return 1;
+    }
+    if (
+      item.status === 'minor_difference' ||
+      (item.sourceValue && item.osmValue && item.sourceValue !== item.osmValue && item.action === 'ignore')
+    ) {
+      return 2;
+    }
+    return 3;
+  }
 
-      // Text filter
-      if (!filterText.trim()) return true;
-      const q = filterText.toLowerCase().trim();
-      return (
-        item.key.toLowerCase().includes(q) ||
-        (item.sourceValue && item.sourceValue.toLowerCase().includes(q)) ||
-        (item.osmValue && item.osmValue.toLowerCase().includes(q)) ||
-        (item.stagedValue && item.stagedValue.toLowerCase().includes(q))
-      );
-    })
+  // Filtered and sorted diff items
+  const filteredItems = $derived(
+    diffItems
+      .filter((item) => {
+        // Category filter
+        if (filterCategory === 'modified') {
+          const isModified = item.stagedValue !== (item.osmValue || '');
+          if (!isModified) return false;
+        } else if (filterCategory === 'missing') {
+          if (item.status !== 'missing_in_osm' && item.status !== 'new_in_page') return false;
+        } else if (filterCategory === 'identical') {
+          if (item.status !== 'identical' && item.status !== 'minor_difference') return false;
+        }
+
+        // Text filter
+        if (!filterText.trim()) return true;
+        const q = filterText.toLowerCase().trim();
+        return (
+          item.key.toLowerCase().includes(q) ||
+          (item.sourceValue && item.sourceValue.toLowerCase().includes(q)) ||
+          (item.osmValue && item.osmValue.toLowerCase().includes(q)) ||
+          (item.stagedValue && item.stagedValue.toLowerCase().includes(q))
+        );
+      })
+      .sort((a, b) => {
+        const tierA = getTier(a);
+        const tierB = getTier(b);
+        if (tierA !== tierB) return tierA - tierB;
+
+        const priorityKeys = [
+          'name',
+          'amenity',
+          'shop',
+          'tourism',
+          'addr:housenumber',
+          'addr:street',
+          'phone',
+          'website',
+          'opening_hours',
+        ];
+        const idxA = priorityKeys.indexOf(a.key);
+        const idxB = priorityKeys.indexOf(b.key);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.key.localeCompare(b.key);
+      })
   );
 
   // Count of staged modifications vs OSM initial values
@@ -116,6 +158,8 @@
       return { text: 'Staged', class: 'badge-staged' };
     }
     switch (status) {
+      case 'minor_difference':
+        return { text: 'Minor Diff', class: 'badge-minor' };
       case 'identical':
         return { text: 'Matches OSM', class: 'badge-identical' };
       case 'missing_in_osm':
@@ -246,7 +290,11 @@
             {@const isModified = item.stagedValue !== (item.osmValue || '')}
             {@const badge = getStatusBadge(item.status, isModified)}
             {@const validation = validateOsmTag(item.key, item.stagedValue)}
-            <tr class="diff-row" class:row-modified={isModified}>
+            <tr
+              class="diff-row"
+              class:row-modified={isModified}
+              class:row-minor-diff={item.status === 'minor_difference' && !isModified}
+            >
               <!-- Column 1: Key -->
               <td class="td-key">
                 <span class="tag-key-name">{item.key}</span>
@@ -257,7 +305,48 @@
               <td class="td-source">
                 {#if item.sourceValue}
                   <div class="value-source-box" title={item.sourceValue}>
-                    <span class="value-text">{item.sourceValue}</span>
+                    <div class="source-content">
+                      <span class="value-text">{item.sourceValue}</span>
+                      {#if item.sourceOrigin === 'schema_org' || item.sourceOrigin === 'json_ld'}
+                        <span
+                          class="source-origin-badge badge-schema"
+                          title="Extracted from Schema.org metadata embedded in the webpage markup (may differ from visible text)."
+                        >
+                          🏷️ Schema.org
+                        </span>
+                      {:else if item.sourceOrigin === 'microdata'}
+                        <span
+                          class="source-origin-badge badge-microdata"
+                          title="Extracted from HTML5 Microdata in webpage markup."
+                        >
+                          🏷️ Microdata
+                        </span>
+                      {:else if item.sourceOrigin === 'opengraph'}
+                        <span
+                          class="source-origin-badge badge-opengraph"
+                          title="Extracted from OpenGraph meta tags."
+                        >
+                          🏷️ OpenGraph
+                        </span>
+                      {:else if item.sourceOrigin === 'manual_search'}
+                        <span
+                          class="source-origin-badge badge-search"
+                          title="From manual search input."
+                        >
+                          🔍 Search
+                        </span>
+                      {/if}
+
+                      {#if item.key === 'opening_hours' && (item.sourceOrigin === 'schema_org' || item.sourceOrigin === 'json_ld')}
+                        <span
+                          class="schema-warning-note"
+                          title="Hours extracted from embedded Schema.org metadata. Please verify against hours displayed on the webpage."
+                        >
+                          ⚠️ Embedded schema hours: verify against page text
+                        </span>
+                      {/if}
+                    </div>
+
                     {#if !readOnly && item.stagedValue !== item.sourceValue}
                       <button
                         type="button"
@@ -703,9 +792,25 @@
     background: #f0f7ff;
   }
 
+  .row-minor-diff {
+    opacity: 0.75;
+    background: #fafafa;
+  }
+
+  .row-minor-diff:hover {
+    opacity: 1;
+  }
+
   @media (prefers-color-scheme: dark) {
     .row-modified {
       background: #132338;
+    }
+    .row-minor-diff {
+      background: #1a1a1a;
+      opacity: 0.75;
+    }
+    .row-minor-diff:hover {
+      opacity: 1;
     }
   }
 
@@ -746,6 +851,11 @@
     background: #e8f5e9;
     color: #2e7d32;
   }
+  .badge-minor {
+    background: #eceff1;
+    color: #455a64;
+    border: 1px solid #cfd8dc;
+  }
   .badge-missing {
     background: #fff8e1;
     color: #f57f17;
@@ -773,6 +883,11 @@
       background: #19381e;
       color: #81c784;
     }
+    .badge-minor {
+      background: #263238;
+      color: #90a4ae;
+      border-color: #37474f;
+    }
     .badge-missing {
       background: #383015;
       color: #ffb74d;
@@ -792,6 +907,86 @@
     .badge-staged {
       background: #122c4d;
       color: #64b5f6;
+    }
+  }
+
+  .source-content {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .source-origin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-top: 2px;
+    width: fit-content;
+    letter-spacing: 0.2px;
+  }
+
+  .badge-schema {
+    background: #ede7f6;
+    color: #5e35b1;
+    border: 1px solid #d1c4e9;
+  }
+
+  .badge-microdata {
+    background: #e0f2f1;
+    color: #00695c;
+    border: 1px solid #b2dfdb;
+  }
+
+  .badge-opengraph {
+    background: #e3f2fd;
+    color: #1565c0;
+    border: 1px solid #bbdefb;
+  }
+
+  .badge-search {
+    background: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffe0b2;
+  }
+
+  .schema-warning-note {
+    display: block;
+    font-size: 10px;
+    color: #c62828;
+    margin-top: 3px;
+    line-height: 1.25;
+    font-style: italic;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .badge-schema {
+      background: #2e1c48;
+      color: #b39ddb;
+      border-color: #4527a0;
+    }
+    .badge-microdata {
+      background: #10332f;
+      color: #80cbc4;
+      border-color: #004d40;
+    }
+    .badge-opengraph {
+      background: #102a43;
+      color: #90caf9;
+      border-color: #1e3a5f;
+    }
+    .badge-search {
+      background: #3e2710;
+      color: #ffcc80;
+      border-color: #e65100;
+    }
+    .schema-warning-note {
+      color: #ef9a9a;
     }
   }
 

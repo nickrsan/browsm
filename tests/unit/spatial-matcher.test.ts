@@ -119,6 +119,60 @@ describe('Spatial Matcher Service', () => {
       expect(websiteDiff?.status).toBe('missing_in_osm');
       expect(websiteDiff?.action).toBe('apply');
     });
+
+    it('categorizes minor differences (URL trailing slash, phone punctuation) as minor_difference and ignores by default', () => {
+      const sourceTags = {
+        name: 'Hidden Dumpling House',
+        website: 'https://hiddendumplinghousemidtown.com/',
+        phone: '(212) 555-1234',
+        opening_hours: 'Mo-Su 11:00-22:00',
+      };
+
+      const liveOsmElement: OsmElement = {
+        id: 701,
+        type: 'node',
+        lat: 40.75,
+        lon: -73.98,
+        version: 1,
+        tags: {
+          name: 'Hidden Dumpling House',
+          website: 'https://hiddendumplinghousemidtown.com', // No trailing slash
+          phone: '+1 212 555 1234', // Formatted international
+          opening_hours: 'Mo-Fr 12:00-21:00', // Actual difference
+        },
+      };
+
+      const diffs = generateTagDiff(
+        sourceTags,
+        liveOsmElement,
+        'schema_org',
+        'Extracted from Schema.org JSON-LD'
+      );
+
+      const websiteDiff = diffs.find((d) => d.key === 'website');
+      expect(websiteDiff?.status).toBe('minor_difference');
+      expect(websiteDiff?.action).toBe('ignore');
+      expect(websiteDiff?.stagedValue).toBe('https://hiddendumplinghousemidtown.com');
+      expect(websiteDiff?.sourceOrigin).toBe('schema_org');
+
+      const phoneDiff = diffs.find((d) => d.key === 'phone');
+      expect(phoneDiff?.status).toBe('minor_difference');
+      expect(phoneDiff?.action).toBe('ignore');
+      expect(phoneDiff?.stagedValue).toBe('+1 212 555 1234');
+
+      const hoursDiff = diffs.find((d) => d.key === 'opening_hours');
+      expect(hoursDiff?.status).toBe('outdated_in_osm');
+      expect(hoursDiff?.action).toBe('apply');
+      expect(hoursDiff?.stagedValue).toBe('Mo-Su 11:00-22:00');
+      expect(hoursDiff?.sourceNote).toBe('Extracted from Schema.org JSON-LD');
+
+      // Verify sorting: staged changes first (opening_hours), then minor diffs (phone, website), then identical (name)
+      expect(diffs[0].key).toBe('opening_hours');
+      const minorKeys = diffs.slice(1, 3).map((d) => d.key);
+      expect(minorKeys).toContain('phone');
+      expect(minorKeys).toContain('website');
+      expect(diffs[3].key).toBe('name');
+    });
   });
 
   describe('Candidate Matching & Scoring', () => {

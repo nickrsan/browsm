@@ -24,7 +24,6 @@ export const test = base.extend<ExtensionFixtures>({
         `--load-extension=${pathToExtension}`,
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-gpu',
       ],
     });
     await use(context);

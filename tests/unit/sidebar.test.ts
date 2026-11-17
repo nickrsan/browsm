@@ -74,10 +74,12 @@ describe('Sidebar.svelte (Svelte 5 Workspace)', () => {
     expect(screen.getByText(/How to use Browsm:/i)).toBeInTheDocument();
   });
 
-  it('renders the vector map container element', () => {
+  it('hides vector map and comparison matrix in initial instructions state', () => {
     const { container } = render(Sidebar);
     const mapDiv = container.querySelector('.map-section');
-    expect(mapDiv).toBeInTheDocument();
+    expect(mapDiv).toBeNull();
+    expect(screen.queryByText('Tag Comparison Matrix')).not.toBeInTheDocument();
+    expect(screen.getByText(/How to use Browsm:/i)).toBeInTheDocument();
   });
 
   it('loads and displays initial state when storage contains a saved lookup', async () => {
@@ -101,11 +103,12 @@ describe('Sidebar.svelte (Svelte 5 Workspace)', () => {
       },
     });
 
-    render(Sidebar);
+    const { container } = render(Sidebar);
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { level: 2, name: /The Ocean Cafe/i })).toBeInTheDocument();
-      expect(screen.getByText('Tag Diff Matrix')).toBeInTheDocument();
+      expect(screen.getByText('Tag Comparison Matrix')).toBeInTheDocument();
+      expect(container.querySelector('.map-section')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Commit Changeset/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Create Note/i })).toBeInTheDocument();
     });

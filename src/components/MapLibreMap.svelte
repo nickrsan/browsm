@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import {
+  import * as pmtiles from 'pmtiles';
+  import maplibregl, {
     Map as MapLibreInstance,
     Marker,
     NavigationControl,
@@ -16,6 +17,16 @@
     type MapStyleType,
     type MapMarkerCategory,
   } from '@/types/map';
+
+  // Register PMTiles protocol globally with MapLibre to support OpenFreeMap and custom PMTiles archives
+  try {
+    if (typeof maplibregl !== 'undefined' && maplibregl && typeof maplibregl.addProtocol === 'function') {
+      const pmtilesProtocol = new pmtiles.Protocol();
+      maplibregl.addProtocol('pmtiles', pmtilesProtocol.tile);
+    }
+  } catch {
+    // Ignore if already registered
+  }
 
   interface Props {
     center?: [number, number]; // [lon, lat]
@@ -185,11 +196,26 @@
         isMapLoaded = true;
         mapInstance = activeMap;
 
+        // Ensure map is properly sized and centered on load
+        if (typeof activeMap.resize === 'function') {
+          activeMap.resize();
+        }
+        if (
+          typeof activeMap.jumpTo === 'function' &&
+          center &&
+          center.length === 2 &&
+          (center[0] !== 0 || center[1] !== 0)
+        ) {
+          activeMap.jumpTo({ center, zoom });
+        }
+
         // Add GeoJSON structure source
-        activeMap.addSource('browsm-structures-source', {
-          type: 'geojson',
-          data: buildStructuresGeoJson(structures, selectedElementId),
-        });
+        if (typeof activeMap.addSource === 'function') {
+          activeMap.addSource('browsm-structures-source', {
+            type: 'geojson',
+            data: buildStructuresGeoJson(structures, selectedElementId),
+          });
+        }
 
         // Add fill layer for structures/buildings
         activeMap.addLayer({
@@ -315,6 +341,9 @@
   $effect(() => {
     if (!mapInstance || !isMapLoaded) return;
 
+    // Depend on selectedElementId to trigger reactive marker refresh
+    const _selected = selectedElementId;
+
     // Clean up existing markers
     activeMarkers.forEach((m) => m.remove());
     activeMarkers = [];
@@ -359,15 +388,28 @@
   $effect(() => {
     if (!mapInstance || !isMapLoaded) return;
     if (center && center.length === 2 && !Number.isNaN(center[0]) && !Number.isNaN(center[1])) {
-      const currentCenter = mapInstance.getCenter();
+      const currentCenter =
+        typeof mapInstance.getCenter === 'function'
+          ? mapInstance.getCenter()
+          : { lng: center[0], lat: center[1] };
+      const currentZoom =
+        typeof mapInstance.getZoom === 'function' ? mapInstance.getZoom() : zoom;
+
       const dist = Math.hypot(currentCenter.lng - center[0], currentCenter.lat - center[1]);
-      if (dist > 0.0001) {
-        mapInstance.flyTo({
-          center: center,
-          zoom: zoom,
-          essential: true,
-          duration: 800,
-        });
+      const zoomDiff = Math.abs(currentZoom - zoom);
+
+      if (dist > 0.0001 || zoomDiff > 0.1) {
+        if (typeof mapInstance.resize === 'function') {
+          mapInstance.resize();
+        }
+        if (typeof mapInstance.flyTo === 'function') {
+          mapInstance.flyTo({
+            center: center,
+            zoom: zoom,
+            essential: true,
+            duration: 800,
+          });
+        }
       }
     }
   });

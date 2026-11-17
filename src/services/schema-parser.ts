@@ -221,6 +221,7 @@ export function parseJsonLdObject(data: unknown, sourceUrl: string): SchemaOrgPl
     openingHours,
     email,
     sourceUrl,
+    metadataSource: 'json_ld',
   };
 }
 
@@ -319,6 +320,7 @@ export function extractMicrodataFromDocument(doc: Document, sourceUrl: string): 
         url: url || sourceUrl,
         email,
         sourceUrl,
+        metadataSource: 'microdata',
       };
     }
   }
@@ -367,6 +369,7 @@ export function extractMetaTagsFromDocument(doc: Document, sourceUrl: string): P
     geo,
     telephone: ogPhone,
     sourceUrl,
+    metadataSource: 'opengraph',
   };
 }
 
@@ -394,6 +397,7 @@ export function extractSchemaFromDocument(doc: Document, sourceUrl: string): Sch
       geo: meta.geo,
       telephone: meta.telephone,
       sourceUrl,
+      metadataSource: 'opengraph',
     };
   }
 

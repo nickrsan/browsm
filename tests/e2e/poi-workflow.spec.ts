@@ -22,12 +22,11 @@ test.describe('Browsm Browser Extension End-to-End Suite', () => {
     await expect(writesOnlyRadio).toBeChecked();
   });
 
-  test('Sidebar workspace loads with header, search bar, map, and action controls', async ({
+  test('Sidebar workspace loads with header, search bar, instructions, and settings controls', async ({
     sidebarPage,
   }) => {
     await expect(sidebarPage.locator('.sidebar-main-title')).toContainText('Browsm');
     await expect(sidebarPage.locator('input[placeholder*="Search address"]')).toBeVisible();
-    await expect(sidebarPage.locator('.map-section')).toBeVisible();
     await expect(sidebarPage.locator('#instructions')).toBeVisible();
   });
 

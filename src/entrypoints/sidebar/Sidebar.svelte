@@ -64,9 +64,14 @@
    */
   function computeDiffs(elem: OsmElement | null, pagePlace: SchemaOrgPlace | null) {
     const pageTags = pagePlace ? convertSchemaPlaceToOsmTags(pagePlace) : {};
+    const sourceOrigin = pagePlace?.metadataSource || (pagePlace ? 'schema_org' : 'manual_search');
+    const sourceNote =
+      pagePlace?.metadataSource === 'json_ld' || pagePlace?.metadataSource === 'schema_org'
+        ? 'Extracted from Schema.org metadata embedded in the webpage markup (may differ from visible text).'
+        : undefined;
 
     if (elem) {
-      const generated = generateTagDiff(pageTags, elem);
+      const generated = generateTagDiff(pageTags, elem, sourceOrigin, sourceNote);
       diffItems = generated;
       const initialStaged: Record<string, string> = {};
       for (const item of generated) {
@@ -89,6 +94,8 @@
             stagedValue: v,
             status: 'missing_in_osm',
             action: 'apply',
+            sourceOrigin,
+            sourceNote,
           });
           initialStaged[k] = v;
         }
@@ -159,6 +166,10 @@
   function selectElement(elem: OsmElement | null) {
     selectedElement = elem;
     selectedElementId = elem ? elem.id : null;
+    if (elem && elem.lat !== undefined && elem.lon !== undefined && !Number.isNaN(elem.lat) && !Number.isNaN(elem.lon)) {
+      mapCenter = [elem.lon, elem.lat];
+      mapZoom = 17;
+    }
     computeDiffs(elem, detectedPagePlace);
   }
 
@@ -205,7 +216,7 @@
 
       if (parsedLat !== undefined && parsedLon !== undefined && !Number.isNaN(parsedLat) && !Number.isNaN(parsedLon)) {
         mapCenter = [parsedLon, parsedLat];
-        mapZoom = 16;
+        mapZoom = 17;
         populateMapElements(nearbyElementsList, parsedLat, parsedLon, name, payload.osm_id);
 
         // Check if an explicit matchedElementId was resolved
@@ -278,6 +289,16 @@
    */
   function handleInspectPagePlace() {
     if (!detectedPagePlace) return;
+
+    if (
+      detectedPagePlace.geo?.latitude !== undefined &&
+      detectedPagePlace.geo?.longitude !== undefined &&
+      !Number.isNaN(detectedPagePlace.geo.latitude) &&
+      !Number.isNaN(detectedPagePlace.geo.longitude)
+    ) {
+      mapCenter = [detectedPagePlace.geo.longitude, detectedPagePlace.geo.latitude];
+      mapZoom = 17;
+    }
 
     const query =
       detectedPagePlace.name ||
@@ -481,7 +502,7 @@
 
     const unwatchSchema = messaging.onMessage('schemaDetected', ({ data: payload }) => {
       detectedPagePlace = payload.place;
-      if (status === 'response' || status === 'instructions') {
+      if (status === 'response') {
         computeDiffs(selectedElement, detectedPagePlace);
       }
     });
@@ -557,24 +578,6 @@
     </div>
   {/if}
 
-  <!-- Interactive MapLibre Vector Map -->
-  <div class="map-section">
-    <MapLibreMap
-      center={mapCenter}
-      zoom={mapZoom}
-      {markers}
-      {structures}
-      {selectedElementId}
-      height="300px"
-      onMarkerClick={(m) => {
-        if (m.element) selectElement(m.element);
-      }}
-      onStructureClick={(s) => {
-        if (s.element) selectElement(s.element);
-      }}
-    />
-  </div>
-
   <!-- Editor Feedback Alert -->
   {#if editorFeedback}
     <div class="editor-feedback feedback-{editorFeedback.type}" role="status">
@@ -589,13 +592,50 @@
         <li>Browse any local business or restaurant website.</li>
         <li>Select an address on the page, right-click, and choose <em>"Check Address in OSM"</em>.</li>
         <li>Or use the search bar above to look up any place directly.</li>
+        <li>If place markup is detected on the page, click <strong>Inspect</strong> above to view live map data and compare tags.</li>
       </ol>
     </div>
   {:else if status === 'searching'}
+    {#if mapCenter[0] !== 0 || mapCenter[1] !== 0}
+      <div class="map-section">
+        <MapLibreMap
+          center={mapCenter}
+          zoom={mapZoom}
+          {markers}
+          {structures}
+          {selectedElementId}
+          height="300px"
+          onMarkerClick={(m) => {
+            if (m.element) selectElement(m.element);
+          }}
+          onStructureClick={(s) => {
+            if (s.element) selectElement(s.element);
+          }}
+        />
+      </div>
+    {/if}
     <div id="searching" class="searching-card">
       <span class="spinner-icon">⏳</span> Querying OpenStreetMap and Nominatim...
     </div>
   {:else if status === 'response'}
+    <!-- Interactive MapLibre Vector Map -->
+    <div class="map-section">
+      <MapLibreMap
+        center={mapCenter}
+        zoom={mapZoom}
+        {markers}
+        {structures}
+        {selectedElementId}
+        height="300px"
+        onMarkerClick={(m) => {
+          if (m.element) selectElement(m.element);
+        }}
+        onStructureClick={(s) => {
+          if (s.element) selectElement(s.element);
+        }}
+      />
+    </div>
+
     <!-- Selected POI / Structure Header Card -->
     <div class="poi-selection-card">
       <div class="poi-header-row">

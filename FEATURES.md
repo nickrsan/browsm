@@ -72,3 +72,10 @@ This registry tracks existing and planned features of the Browsm extension to en
 45. **Playwright Browser Extension E2E Suite**: End-to-end testing with unpacked Chromium extension fixtures verifying popup, sidebar, options dashboard, and settings interactions.
 46. **Full Live OSM Value Matrix Synchronization**: Messaging and storage synchronization transmitting bounding-box elements and matched entity IDs to the Tag Comparison Matrix, ensuring live OSM values are populated and matched.
 47. **WebExtension CSP Worker & Vector Tile Support**: Manifest V3 Content Security Policy configured with `worker-src 'self' blob:` and OpenFreeMap domains, paired with resilient `onMount` MapLibre lifecycle initialization.
+
+## Map Inspection, Tag Comparison Optimization & Source Provenance Features
+
+48. **Dynamic Map Zooming & Nearby Elements Visualization on Inspection**: Automatic centering, zoom adjustment (level 17), and vector polygon/pin rendering of nearby API elements whenever a POI is inspected, selected, or searched.
+49. **Clean Progressive Disclosure Workflow**: Unready UI elements (vector map canvas, POI selection card, Tag Comparison Matrix, action buttons) remain cleanly hidden in the initial instructions state until the user clicks "Inspect" or triggers an address search.
+50. **Minor Tag Difference Detection & 3-Tier Matrix Sorting**: Automatically ignores cosmetic formatting discrepancies (URL trailing slashes, phone number hyphens/parentheses/spaces, redundant whitespace) by fading them back, marking them as `Minor Diff`, and preserving OSM values without pre-selecting them for updates; sorts table with staged changes at the top, minor/ignored differences in the middle, and identical tags last.
+51. **Source Provenance Annotations & Metadata Warnings**: Visual chips and tooltips indicating whether tag data originates from embedded Schema.org JSON-LD, HTML5 Microdata, OpenGraph meta tags, or manual search, with explicit advisories on embedded schema opening hours.

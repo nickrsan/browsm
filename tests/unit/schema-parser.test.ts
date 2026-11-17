@@ -129,6 +129,7 @@ describe('Schema Parser Service', () => {
       expect(place?.telephone).toBe('(401) 847-1234');
       expect(place?.address?.streetAddress).toBe('120 Ocean Ave');
       expect(place?.geo?.latitude).toBe(41.4901);
+      expect(place?.metadataSource).toBe('json_ld');
     });
 
     it('extracts place from @graph structure in JSON-LD', () => {
@@ -175,6 +176,7 @@ describe('Schema Parser Service', () => {
       expect(place?.type).toBe('CafeOrCoffeeShop');
       expect(place?.telephone).toBe('+14015551234');
       expect(place?.address?.streetAddress).toBe('88 Spring St');
+      expect(place?.metadataSource).toBe('microdata');
     });
 
     it('falls back to OpenGraph meta tags when structured markup is absent', () => {
@@ -191,6 +193,7 @@ describe('Schema Parser Service', () => {
       expect(place?.name).toBe('Historic Inn');
       expect(place?.geo?.latitude).toBe(41.485);
       expect(place?.address?.streetAddress).toBe('12 Pelham St');
+      expect(place?.metadataSource).toBe('opengraph');
     });
   });
 });

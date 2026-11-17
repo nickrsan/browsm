@@ -10,6 +10,7 @@ import type { OsmElement } from './osm';
  */
 export type TagDiffStatus =
   | 'identical'
+  | 'minor_difference'
   | 'missing_in_osm'
   | 'outdated_in_osm'
   | 'conflict'
@@ -31,6 +32,14 @@ export interface TagDiffItem {
   status: TagDiffStatus;
   action: TagDiffAction;
   customValue?: string;
+  /**
+   * Provenance of the source value (e.g. 'schema_org', 'microdata', 'opengraph', 'manual_search').
+   */
+  sourceOrigin?: 'schema_org' | 'microdata' | 'opengraph' | 'page_text' | 'manual_search' | 'custom' | string;
+  /**
+   * Explanatory note or warning regarding the source data.
+   */
+  sourceNote?: string;
 }
 
 /**

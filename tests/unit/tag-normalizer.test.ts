@@ -6,6 +6,9 @@ import {
   normalizeAddressToTags,
   normalizeOpeningHours,
   convertSchemaPlaceToOsmTags,
+  canonicalizeWebsiteUrl,
+  canonicalizePhoneDigits,
+  isMinorTagDifference,
 } from '@/services/tag-normalizer';
 import type { SchemaOrgPlace } from '@/types/schema';
 
@@ -124,6 +127,72 @@ describe('Tag Normalizer Service', () => {
         website: 'https://redparrotrestaurant.com/',
         opening_hours: 'Mo-Su 11:30-22:00',
       });
+    });
+  });
+
+  describe('Website URL Canonicalization', () => {
+    it('strips trailing slashes from root and subpaths', () => {
+      expect(canonicalizeWebsiteUrl('https://example.com/')).toBe('https://example.com');
+      expect(canonicalizeWebsiteUrl('https://example.com')).toBe('https://example.com');
+      expect(canonicalizeWebsiteUrl('http://example.com/menu/')).toBe('http://example.com/menu');
+    });
+
+    it('handles URLs without protocol and lowercase domains', () => {
+      expect(canonicalizeWebsiteUrl('EXAMPLE.COM/about/')).toBe('https://example.com/about');
+      expect(canonicalizeWebsiteUrl(undefined)).toBeUndefined();
+    });
+  });
+
+  describe('Phone Digits Canonicalization', () => {
+    it('extracts digits and normalizes 10-digit North American numbers', () => {
+      expect(canonicalizePhoneDigits('(401) 847-1234')).toBe('14018471234');
+      expect(canonicalizePhoneDigits('+1-401-847-1234')).toBe('14018471234');
+      expect(canonicalizePhoneDigits('+1 401 847 1234')).toBe('14018471234');
+      expect(canonicalizePhoneDigits('401.847.1234')).toBe('14018471234');
+    });
+
+    it('preserves international phone numbers with other country codes', () => {
+      expect(canonicalizePhoneDigits('+44 20 7946 0912')).toBe('442079460912');
+      expect(canonicalizePhoneDigits(undefined)).toBeUndefined();
+    });
+  });
+
+  describe('Minor Tag Difference Detection (isMinorTagDifference)', () => {
+    it('identifies trailing slash URL differences as minor', () => {
+      expect(
+        isMinorTagDifference('website', 'https://hiddendumplinghousemidtown.com/', 'https://hiddendumplinghousemidtown.com')
+      ).toBe(true);
+      expect(
+        isMinorTagDifference('contact:website', 'https://example.com/menu', 'https://example.com/menu/')
+      ).toBe(true);
+    });
+
+    it('identifies phone number punctuation/spacing differences as minor', () => {
+      expect(isMinorTagDifference('phone', '+1 401 847 1234', '(401) 847-1234')).toBe(true);
+      expect(isMinorTagDifference('phone', '+1-401-847-1234', '+1 401 847 1234')).toBe(true);
+      expect(isMinorTagDifference('contact:phone', '401.847.1234', '+1-401-847-1234')).toBe(true);
+    });
+
+    it('identifies multiple internal spaces as minor difference', () => {
+      expect(isMinorTagDifference('addr:street', 'Ocean   Avenue', 'Ocean Avenue')).toBe(true);
+    });
+
+    it('identifies case difference in boolean tags as minor', () => {
+      expect(isMinorTagDifference('wheelchair', 'Yes', 'yes')).toBe(true);
+      expect(isMinorTagDifference('takeaway', 'YES', 'yes')).toBe(true);
+    });
+
+    it('returns false for genuine semantic differences', () => {
+      expect(isMinorTagDifference('phone', '+1 401 847 1234', '+1 401 847 9999')).toBe(false);
+      expect(isMinorTagDifference('website', 'https://redparrot.com', 'https://otherplace.com')).toBe(false);
+      expect(isMinorTagDifference('name', 'Old Cafe', 'New Cafe')).toBe(false);
+      expect(isMinorTagDifference('opening_hours', 'Mo-Fr 09:00-17:00', 'Mo-Su 10:00-22:00')).toBe(false);
+    });
+
+    it('returns false when values are identical or missing', () => {
+      expect(isMinorTagDifference('website', 'https://example.com', 'https://example.com')).toBe(false);
+      expect(isMinorTagDifference('phone', undefined, '+1 401 847 1234')).toBe(false);
+      expect(isMinorTagDifference('phone', '+1 401 847 1234', undefined)).toBe(false);
     });
   });
 });

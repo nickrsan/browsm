@@ -65,8 +65,14 @@ browsm/
   - Splits street strings into `addr:housenumber` and `addr:street`, maps `addr:city`, `addr:state`, `addr:postcode`, `addr:country`.
 - `normalizePhoneToE123(rawPhone?: string): string | undefined`
   - Normalizes phone numbers to international standard format with proper country prefixes.
+- `canonicalizePhoneDigits(rawPhone?: string): string | undefined`
+  - Extracts normalized dialable digits (normalizing North American 10-digit to 11-digit with country code 1) for semantic phone comparison.
 - `normalizeWebsite(rawUrl?: string): string | undefined`
   - Validates and normalizes website URLs with `https://` protocol.
+- `canonicalizeWebsiteUrl(rawUrl?: string): string | undefined`
+  - Canonicalizes URLs by stripping trailing slashes, lowercasing protocol and host, and standardizing empty root paths.
+- `isMinorTagDifference(key: string, sourceVal?: string, osmVal?: string): boolean`
+  - Determines if a discrepancy between source and live OSM values is cosmetic (such as trailing slashes in URLs, phone number parentheses/hyphens/spaces, or redundant whitespace).
 - `validateOsmTag(key: string, value: string): { isValid: boolean; warning?: string }`
   - Validates OSM tag keys and values in real time, checking for whitespace, international phone prefix requirements, URL protocols, and standard boolean enum values.
 - `COMMON_OSM_TAG_KEYS: string[]`
@@ -89,10 +95,10 @@ browsm/
 ### Spatial Matcher Service (`src/services/spatial-matcher.ts`)
 - `fetchOsmElementsInBbox(bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number }): Promise<OsmElement[]>`
   - Queries `https://api.openstreetmap.org/api/0.6/map?bbox=...` and parses both standalone `<node>` elements and `<way>` building structures with geometry centroids.
-- `findBestMatch(target: { name?: string; phone?: string; website?: string; lat?: number; lon?: number }, candidates: OsmElement[]): SpatialMatchResult`
-  - Scores candidates using Sørensen-Dice name similarity, coordinate distance, phone, and website.
-- `generateTagDiff(sourceTags: Record<string, string>, targetElement?: OsmElement): TagDiffItem[]`
-  - Generates itemized diffs between page metadata tags and live OSM element tags.
+- `findBestMatch(target: { name?: string; phone?: string; website?: string; lat?: number; lon?: number; osmId?: number | string; osmType?: string }, candidates: OsmElement[]): SpatialMatchResult`
+  - Scores candidates using direct OSM ID matching, Sørensen-Dice name similarity across multiple name tags (`name`, `name:en`, `alt_name`, `official_name`, `brand`, `operator`), coordinate distance, phone, website, and category tags.
+- `generateTagDiff(sourceTags: Record<string, string>, targetElement?: OsmElement, sourceOrigin?: string, sourceNote?: string): TagDiffItem[]`
+  - Generates itemized diffs between page metadata tags and live OSM element tags, categorizes cosmetic formatting discrepancies as `minor_difference` (ignored by default with OSM value preserved), attaches provenance metadata, and applies 3-tier sorting (staged changes top, minor/ignored differences middle, identical tags bottom).
 
 ### OAuth 2.0 PKCE Client (`src/services/osm-auth.ts`)
 - `getAuthStorageKey(endpointId?: string): string`

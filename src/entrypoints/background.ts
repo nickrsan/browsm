@@ -22,7 +22,7 @@ export default defineBackground(() => {
           // @ts-ignore
           await browser.sidebarAction.open();
         }
-      } else if (import.meta.env.BROWSER === 'chrome' && tabId !== undefined) {
+      } else if (tabId !== undefined) {
         // @ts-ignore Chromium side panel API
         if (browser.sidePanel?.setOptions && browser.sidePanel?.open) {
           // @ts-ignore
@@ -34,8 +34,6 @@ export default defineBackground(() => {
           // @ts-ignore
           await browser.sidePanel.open({ tabId });
         }
-      } else {
-        browser.action.setPopup({ popup: 'sidebar.html' });
       }
     } catch (err) {
       console.debug('[Browsm] Could not open sidebar automatically:', err);

@@ -134,59 +134,65 @@
       );
       createdChangesetId = changesetId;
 
-      // 2. Perform Element Create or Update
       let elementId: number;
-      if (targetElement) {
-        submitProgress = `Updating ${targetElement.type} #${targetElement.id}...`;
-        elementId = targetElement.id;
+      try {
+        // 2. Perform Element Create or Update
+        if (targetElement) {
+          submitProgress = `Updating ${targetElement.type} #${targetElement.id}...`;
+          elementId = targetElement.id;
 
-        if (targetElement.type === 'node') {
-          await updateNode(
+          if (targetElement.type === 'node') {
+            await updateNode(
+              token,
+              {
+                id: targetElement.id,
+                version: targetElement.version,
+                lat: targetElement.lat,
+                lon: targetElement.lon,
+                changesetId,
+                tags: cleanStagedTags,
+              },
+              baseUrl
+            );
+          } else if (targetElement.type === 'way') {
+            await updateWayTags(
+              token,
+              {
+                id: targetElement.id,
+                version: targetElement.version,
+                changesetId,
+                tags: cleanStagedTags,
+                nodeRefs: [], // Keep existing geometry refs
+              },
+              baseUrl
+            );
+          }
+        } else {
+          submitProgress = 'Creating new POI node...';
+          const lat = coordinates?.lat ?? 0;
+          const lon = coordinates?.lon ?? 0;
+          elementId = await createNode(
             token,
             {
-              id: targetElement.id,
-              version: targetElement.version,
-              lat: targetElement.lat,
-              lon: targetElement.lon,
               changesetId,
+              lat,
+              lon,
               tags: cleanStagedTags,
-            },
-            baseUrl
-          );
-        } else if (targetElement.type === 'way') {
-          await updateWayTags(
-            token,
-            {
-              id: targetElement.id,
-              version: targetElement.version,
-              changesetId,
-              tags: cleanStagedTags,
-              nodeRefs: [], // Keep existing geometry refs
             },
             baseUrl
           );
         }
-      } else {
-        submitProgress = 'Creating new POI node...';
-        const lat = coordinates?.lat ?? 0;
-        const lon = coordinates?.lon ?? 0;
-        elementId = await createNode(
-          token,
-          {
-            changesetId,
-            lat,
-            lon,
-            tags: cleanStagedTags,
-          },
-          baseUrl
-        );
+
+        resultElementId = elementId;
+      } finally {
+        // 3. Always close the changeset to prevent dangling open changesets
+        submitProgress = 'Closing changeset...';
+        try {
+          await closeChangeset(token, changesetId, baseUrl);
+        } catch (closeErr) {
+          console.warn(`Failed to close changeset #${changesetId}:`, closeErr);
+        }
       }
-
-      resultElementId = elementId;
-
-      // 3. Close Changeset
-      submitProgress = 'Closing changeset...';
-      await closeChangeset(token, changesetId, baseUrl);
 
       submitProgress = 'Changeset successfully committed!';
       if (onSuccess) {

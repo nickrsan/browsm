@@ -107,6 +107,104 @@ export function normalizePhoneToE123(rawPhone?: string): string | undefined {
 }
 
 /**
+ * Canonicalizes a website URL by stripping trailing slashes, standardizing protocol, and lowercasing host.
+ */
+export function canonicalizeWebsiteUrl(rawUrl?: string): string | undefined {
+  if (!rawUrl) return undefined;
+  let cleaned = rawUrl.trim();
+  if (!cleaned) return undefined;
+
+  // Add https:// protocol if missing
+  if (!/^https?:\/\//i.test(cleaned)) {
+    cleaned = `https://${cleaned}`;
+  }
+
+  try {
+    const url = new URL(cleaned);
+    let pathname = url.pathname;
+    if (pathname === '/') {
+      pathname = '';
+    } else {
+      pathname = pathname.replace(/\/+$/, '');
+    }
+    return `${url.protocol.toLowerCase()}//${url.host.toLowerCase()}${pathname}${url.search}${url.hash}`;
+  } catch {
+    return cleaned.replace(/\/+$/, '').toLowerCase();
+  }
+}
+
+/**
+ * Extracts normalized digits from a phone number string for semantic comparison.
+ */
+export function canonicalizePhoneDigits(rawPhone?: string): string | undefined {
+  if (!rawPhone) return undefined;
+  const digits = rawPhone.replace(/\D/g, '');
+  if (!digits) return undefined;
+
+  // Normalize North American 10-digit to 11-digit with country code 1
+  if (digits.length === 10) {
+    return `1${digits}`;
+  }
+  return digits;
+}
+
+/**
+ * Checks if a difference between source tag value and OSM tag value is a minor cosmetic/formatting difference.
+ * Minor differences include trailing slashes in URLs, phone number punctuation (parentheses, dashes, spaces),
+ * and redundant internal whitespace.
+ */
+export function isMinorTagDifference(key: string, sourceVal?: string, osmVal?: string): boolean {
+  if (!sourceVal || !osmVal) return false;
+  if (sourceVal.trim() === osmVal.trim()) return false;
+
+  const k = key.toLowerCase().trim();
+
+  // 1. Website / URL tags
+  if (k === 'website' || k === 'contact:website' || k === 'url' || k.endsWith(':website') || k.endsWith(':url')) {
+    const cSource = canonicalizeWebsiteUrl(sourceVal);
+    const cOsm = canonicalizeWebsiteUrl(osmVal);
+    if (cSource && cOsm && cSource === cOsm) {
+      return true;
+    }
+  }
+
+  // 2. Phone / Fax tags
+  if (k === 'phone' || k === 'contact:phone' || k === 'fax' || k === 'contact:fax' || k === 'telephone') {
+    const dSource = canonicalizePhoneDigits(sourceVal);
+    const dOsm = canonicalizePhoneDigits(osmVal);
+    if (dSource && dOsm && dSource === dOsm) {
+      return true;
+    }
+  }
+
+  // 3. Normalized internal whitespace
+  const normSource = sourceVal.replace(/\s+/g, ' ').trim();
+  const normOsm = osmVal.replace(/\s+/g, ' ').trim();
+  if (normSource === normOsm) {
+    return true;
+  }
+
+  // 4. Case-insensitive comparison for boolean / enumerated OSM tags
+  const enumKeys = [
+    'wheelchair',
+    'building',
+    'source',
+    'drive_through',
+    'diet:vegetarian',
+    'diet:vegan',
+    'smoking',
+    'internet_access',
+    'takeaway',
+    'delivery',
+  ];
+  if (enumKeys.includes(k) && normSource.toLowerCase() === normOsm.toLowerCase()) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Normalizes and validates a website URL.
  */
 export function normalizeWebsite(rawUrl?: string): string | undefined {

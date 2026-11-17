@@ -66,4 +66,8 @@ export interface SchemaOrgPlace {
    * Originating page URL from which this record was extracted.
    */
   sourceUrl: string;
+  /**
+   * Specific extraction source mechanism (e.g. JSON-LD, Microdata, OpenGraph).
+   */
+  metadataSource?: 'json_ld' | 'microdata' | 'opengraph' | 'heuristic' | string;
 }

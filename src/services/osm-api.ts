@@ -190,6 +190,10 @@ export async function closeChangeset(
 
   if (!response.ok) {
     const errText = await response.text();
+    // If the changeset is already closed (HTTP 409 Conflict), treat it as successfully closed
+    if (response.status === 409 && errText.toLowerCase().includes('closed')) {
+      return;
+    }
     throw new Error(`Failed to close changeset #${changesetId} (HTTP ${response.status}): ${errText}`);
   }
 }
