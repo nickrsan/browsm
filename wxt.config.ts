@@ -31,10 +31,6 @@ export default defineConfig({
         id: "browsm@nicksantos.com"
       }
     },
-    sidebar_action: {
-      default_title: "Browsm",
-      default_panel: "sidebar.html"
-    },
     side_panel: {
       default_path: "sidebar.html"
     },

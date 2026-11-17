@@ -179,6 +179,10 @@ browsm/
 - `formatNoteTextFromPlace(place: SchemaOrgPlace, suggestedTags?: Record<string, string>, userNote?: string): string`
   - Formats detected place attributes and suggested tags into a clean note body.
 
+### Map Component (`src/components/MapLibreMap.svelte`)
+- Encapsulates MapLibre GL JS with OpenFreeMap vector styles (`liberty`, `bright`, `positron`, `dark`) and PMTiles protocol registration (`pmtiles.Protocol`).
+- Configured with `setWorkerUrl(maplibreWorkerUrl)` importing `maplibre-gl/dist/maplibre-gl-worker.mjs?url` to bundle and resolve web worker scripts locally within WebExtension environments across Firefox and Chromium, preventing CSP and worker loading failures.
+
 ### Reactive Authentication Store (`src/stores/auth.svelte.ts`)
 - `authStore`: Svelte 5 runes-powered singleton class exposing:
   - `isAuthenticated`: boolean
