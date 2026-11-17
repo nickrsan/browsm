@@ -51,9 +51,20 @@ export interface OsmUserDetails {
   username: string;
   accountCreated: string;
   changesetCount?: number;
+  unreadMessagesCount?: number;
+  totalMessagesCount?: number;
   description?: string;
   img?: string;
   roles?: string[];
+}
+
+/**
+ * Summary of OpenStreetMap user messages.
+ */
+export interface OsmMessagesSummary {
+  unreadCount: number;
+  totalReceived: number;
+  totalSent: number;
 }
 
 /**

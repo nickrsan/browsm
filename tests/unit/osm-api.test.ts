@@ -146,6 +146,16 @@ describe('OpenStreetMap API 0.6 Client (osm-api)', () => {
         })
       );
     });
+
+    it('handles already-closed changesets (HTTP 409) without throwing', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        text: async () => 'The changeset 12345678 was closed at ...',
+      });
+
+      await expect(closeChangeset(token, 12345678, baseUrl, mockFetch)).resolves.toBeUndefined();
+    });
   });
 
   describe('Node Operations', () => {

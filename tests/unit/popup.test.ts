@@ -52,4 +52,27 @@ describe('Popup App Component', () => {
     expect(screen.getByText('+1 401 555 7777')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Verify in OSM/i })).toBeInTheDocument();
   });
+
+  it('renders detected place card when tab-specific schema exists in storage', async () => {
+    // @ts-ignore
+    globalThis.browser.storage.local.get = vi.fn().mockImplementation(async (keys: string[]) => {
+      if (keys.includes('tab_schema_101')) {
+        return {
+          tab_schema_101: {
+            name: 'Tab Specific Bakery',
+            type: 'Bakery',
+            telephone: '+1 401 555 8888',
+            sourceUrl: 'https://bakery.example.com',
+          },
+        };
+      }
+      return {};
+    });
+
+    render(App);
+
+    expect(await screen.findByText('Tab Specific Bakery')).toBeInTheDocument();
+    expect(screen.getByText('Bakery')).toBeInTheDocument();
+    expect(screen.getByText('+1 401 555 8888')).toBeInTheDocument();
+  });
 });

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import * as pmtiles from 'pmtiles';
-  import maplibregl, {
+  import {
     Map as MapLibreInstance,
     Marker,
     NavigationControl,
     Popup,
+    addProtocol,
     type GeoJSONSource,
   } from 'maplibre-gl';
   import type { Feature, FeatureCollection, Polygon } from 'geojson';
@@ -20,9 +21,9 @@
 
   // Register PMTiles protocol globally with MapLibre to support OpenFreeMap and custom PMTiles archives
   try {
-    if (typeof maplibregl !== 'undefined' && maplibregl && typeof maplibregl.addProtocol === 'function') {
+    if (typeof addProtocol === 'function') {
       const pmtilesProtocol = new pmtiles.Protocol();
-      maplibregl.addProtocol('pmtiles', pmtilesProtocol.tile);
+      addProtocol('pmtiles', pmtilesProtocol.tile);
     }
   } catch {
     // Ignore if already registered

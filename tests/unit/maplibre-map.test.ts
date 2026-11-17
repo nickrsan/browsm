@@ -3,6 +3,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import MapLibreMap from '@/components/MapLibreMap.svelte';
 import { OPENFREEMAP_STYLES, type MapMarker, type MapStructure } from '@/types/map';
 
+const { mockAddProtocol } = vi.hoisted(() => ({
+  mockAddProtocol: vi.fn(),
+}));
+
 const mockFlyTo = vi.fn();
 const mockAddSource = vi.fn();
 const mockAddLayer = vi.fn();
@@ -24,6 +28,7 @@ let mapConstructorOptions: any = null;
 
 vi.mock('maplibre-gl', () => {
   return {
+    addProtocol: mockAddProtocol,
     Map: vi.fn().mockImplementation(function (options: any) {
       mapConstructorOptions = options;
       return {
@@ -63,6 +68,15 @@ describe('MapLibreMap.svelte & Map Types', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mapConstructorOptions = null;
+  });
+
+  it('registers PMTiles protocol handler with MapLibre', () => {
+    render(MapLibreMap, {
+      center: [-71.3128, 41.4901],
+      zoom: 14,
+    });
+
+    expect(mockAddProtocol).toHaveBeenCalledWith('pmtiles', expect.any(Function));
   });
 
   it('defines valid OpenFreeMap CDN vector style URLs without API keys', () => {

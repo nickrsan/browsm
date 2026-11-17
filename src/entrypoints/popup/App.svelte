@@ -13,9 +13,14 @@
 
   onMount(async () => {
     try {
-      const storage = await browser.storage.local.get('currentSchema');
-      if (storage?.currentSchema) {
-        detectedPlace = storage.currentSchema as SchemaOrgPlace;
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      const activeTabId = tabs[0]?.id;
+      const keys = activeTabId !== undefined ? [`tab_schema_${activeTabId}`, 'currentSchema'] : ['currentSchema'];
+      const storage = await browser.storage.local.get(keys);
+      const place = (activeTabId !== undefined && storage[`tab_schema_${activeTabId}`]) || storage.currentSchema;
+
+      if (place) {
+        detectedPlace = place as SchemaOrgPlace;
         statusMessage = '';
       } else {
         statusMessage = 'No Schema.org or Microdata place detected on this page.';
@@ -329,5 +334,40 @@
   }
   .btn-secondary:hover {
     background: #0d47a1;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .popup-container {
+      color: #e0e0e0;
+      background: #1e1e1e;
+    }
+    .popup-header {
+      border-bottom-color: #333333;
+    }
+    .popup-header h2 {
+      color: #81c784;
+    }
+    .place-card {
+      background: #172819;
+      border-color: #2e7d32;
+    }
+    .place-name {
+      color: #81c784;
+    }
+    .detail-label {
+      color: #9e9e9e;
+    }
+    .detail-value {
+      color: #e0e0e0;
+    }
+    .empty-text {
+      color: #9e9e9e;
+    }
+    .btn-gear {
+      color: #e0e0e0;
+    }
+    .btn-gear:hover {
+      background-color: #333333;
+    }
   }
 </style>

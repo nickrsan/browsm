@@ -144,8 +144,10 @@ describe('ChangesetModal Svelte Component', () => {
     expect(onSuccess).toHaveBeenCalledWith(99901, 12345);
   });
 
-  it('displays error message if API call fails during upload', async () => {
-    vi.mocked(osmApi.createChangeset).mockRejectedValue(new Error('Version conflict: node was updated by another user.'));
+  it('displays error message if API call fails during upload and still closes changeset', async () => {
+    vi.mocked(osmApi.createChangeset).mockResolvedValue(99902);
+    vi.mocked(osmApi.updateNode).mockRejectedValue(new Error('Version conflict: node was updated by another user.'));
+    vi.mocked(osmApi.closeChangeset).mockResolvedValue();
 
     render(ChangesetModal, {
       props: {
@@ -165,6 +167,11 @@ describe('ChangesetModal Svelte Component', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Version conflict/i)).toBeInTheDocument();
+      expect(osmApi.closeChangeset).toHaveBeenCalledWith(
+        'mock-sandbox-token',
+        99902,
+        'https://master.apis.dev.openstreetmap.org/api/0.6'
+      );
     });
   });
 });

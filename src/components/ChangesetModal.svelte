@@ -132,7 +132,6 @@
         },
         baseUrl
       );
-      createdChangesetId = changesetId;
 
       let elementId: number;
       try {
@@ -194,6 +193,7 @@
         }
       }
 
+      createdChangesetId = changesetId;
       submitProgress = 'Changeset successfully committed!';
       if (onSuccess) {
         onSuccess(changesetId, elementId);

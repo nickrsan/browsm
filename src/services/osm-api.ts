@@ -98,6 +98,15 @@ export async function getUserDetails(
   const changesetCount = changesetCountStr ? parseInt(changesetCountStr, 10) : undefined;
   const img = userEl.querySelector('img')?.getAttribute('href') || undefined;
 
+  const messagesEl = userEl.querySelector('messages');
+  const receivedEl = messagesEl?.querySelector('received');
+  const unreadMessagesCount = receivedEl?.getAttribute('unread')
+    ? parseInt(receivedEl.getAttribute('unread')!, 10)
+    : (messagesEl ? 0 : undefined);
+  const totalMessagesCount = receivedEl?.getAttribute('count')
+    ? parseInt(receivedEl.getAttribute('count')!, 10)
+    : (messagesEl ? 0 : undefined);
+
   const roles: string[] = [];
   const roleEls = userEl.querySelectorAll('roles > role');
   roleEls.forEach((r) => {
@@ -110,8 +119,25 @@ export async function getUserDetails(
     accountCreated,
     description,
     changesetCount,
+    unreadMessagesCount,
+    totalMessagesCount,
     img,
     roles: roles.length > 0 ? roles : undefined,
+  };
+}
+
+/**
+ * Fetches user message counts and inbox metadata from the OpenStreetMap API.
+ */
+export async function checkUserMessages(
+  accessToken: string,
+  baseUrl: string = DEFAULT_API_BASE_URL,
+  customFetch: typeof fetch = fetch
+): Promise<{ unreadCount: number; totalCount: number }> {
+  const user = await getUserDetails(accessToken, baseUrl, customFetch);
+  return {
+    unreadCount: user.unreadMessagesCount ?? 0,
+    totalCount: user.totalMessagesCount ?? 0,
   };
 }
 
