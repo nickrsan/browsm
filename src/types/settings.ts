@@ -83,7 +83,7 @@ export const ENDPOINT_PRESETS: Record<EndpointPreset, EndpointConfig> = {
     authUrl: 'https://master.apis.dev.openstreetmap.org/oauth2/authorize',
     tokenUrl: 'https://master.apis.dev.openstreetmap.org/oauth2/token',
     webUrl: 'https://master.apis.dev.openstreetmap.org',
-    clientId: 'browsm-web-extension',
+    clientId: '_2poLBk6Mi2EPo4ihJY7dVssZKz6usA0RgWTdfyUBmc',
     scopes: ['read_prefs', 'write_api', 'write_notes'],
   },
   'openhistoricalmap': {
