@@ -137,17 +137,22 @@ browsm/
   - `activeEndpointId`: Current target preset or custom endpoint ID.
   - `devModeRouting`: Granular routing mode (`disabled`, `writes_only`, `reads_and_writes`).
   - `customEndpoint`: User-configured custom instance URLs and credentials.
+  - `preferredEditor`: External editor preference (`id`, `rapid`, `josm`).
+  - `messagePollIntervalMinutes`: Interval in minutes for polling OSM messages while sidebar is open (default: `10`, `0` = disabled).
   - `activeEndpointConfig`: Resolved `EndpointConfig`.
   - `badgeInfo`: Current `EndpointBadgeInfo`.
   - `isDevMode`: boolean flag.
   - `setActiveEndpoint(id)`: Changes target endpoint preset.
   - `setDevModeRouting(routing)`: Updates developer mode routing mode.
   - `setCustomEndpoint(config, selectAsActive)`: Saves custom server configuration.
+  - `setMessagePollInterval(minutes)`: Updates and persists the periodic message polling interval.
   - `resetToDefaults()`: Restores factory configuration.
 
 ### OSM API 0.6 Client (`src/services/osm-api.ts`)
-- `getUserDetails(accessToken: string, baseUrl?: string): Promise<OsmUserDetails>`
-  - Queries `GET /api/0.6/user/details` and parses user profile, changeset count, and roles.
+- `getUserDetails(accessToken: string, baseUrl?: string, customFetch?: typeof fetch): Promise<OsmUserDetails>`
+  - Queries `GET /api/0.6/user/details` and parses user profile, changeset count, roles, and message statistics (`unreadMessagesCount`, `totalMessagesCount`).
+- `checkUserMessages(accessToken: string, baseUrl?: string, customFetch?: typeof fetch): Promise<{ unreadCount: number; totalCount: number }>`
+  - Convenience wrapper querying user details and returning unread and total message counts.
 - `createChangeset(accessToken: string, params: CreateChangesetParams, baseUrl?: string): Promise<number>`
   - Opens a new changeset with `created_by=Browsm` and `source=website`.
 - `closeChangeset(accessToken: string, changesetId: number, baseUrl?: string): Promise<void>`
@@ -173,10 +178,11 @@ browsm/
 - `authStore`: Svelte 5 runes-powered singleton class exposing:
   - `isAuthenticated`: boolean
   - `isLoading`: boolean
-  - `user`: `OsmUserDetails | undefined`
+  - `user`: `OsmUserDetails | undefined` (including `unreadMessagesCount`)
   - `token`: `OsmAuthToken | undefined`
   - `login()`: Initiates OAuth 2.0 PKCE flow.
   - `logout()`: Clears credentials and resets state.
+  - `refreshUserDetails(endpointId?, customFetch?)`: Fetches fresh user details and unread message count from the OSM API, synchronizing reactive state and storage.
   - `init()`: Restores authentication state from local storage.
 
 ---

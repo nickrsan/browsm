@@ -588,6 +588,26 @@
             <option value="josm">JOSM via Remote Control (localhost:8111)</option>
           </select>
         </div>
+
+        <div class="form-group">
+          <label for="msg-poll-interval">OSM Message Polling Interval</label>
+          <select
+            id="msg-poll-interval"
+            value={settingsStore.messagePollIntervalMinutes}
+            onchange={(e) => settingsStore.setMessagePollInterval(Number((e.target as HTMLSelectElement).value))}
+            data-testid="msg-poll-interval-select"
+          >
+            <option value={0}>Disabled (Manual only)</option>
+            <option value={5}>Every 5 minutes</option>
+            <option value={10}>Every 10 minutes (Default)</option>
+            <option value={15}>Every 15 minutes</option>
+            <option value={30}>Every 30 minutes</option>
+            <option value={60}>Every 60 minutes</option>
+          </select>
+          <small class="field-hint">
+            Periodically checks for new direct messages and changeset discussions while the sidebar is open.
+          </small>
+        </div>
       </div>
 
       <div class="card-footer">

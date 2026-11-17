@@ -140,6 +140,25 @@
           </select>
         </div>
 
+        <!-- OSM Message Polling Interval -->
+        <div class="setting-group">
+          <label class="setting-label" for="quick-msg-poll-select">OSM Message Polling Interval</label>
+          <select
+            id="quick-msg-poll-select"
+            class="endpoint-select"
+            value={settingsStore.messagePollIntervalMinutes}
+            onchange={(e) => settingsStore.setMessagePollInterval(Number((e.target as HTMLSelectElement).value))}
+            data-testid="quick-msg-poll-select"
+          >
+            <option value={0}>Disabled (Manual only)</option>
+            <option value={5}>Every 5 minutes</option>
+            <option value={10}>Every 10 minutes (Default)</option>
+            <option value={15}>Every 15 minutes</option>
+            <option value={30}>Every 30 minutes</option>
+            <option value={60}>Every 60 minutes</option>
+          </select>
+        </div>
+
         <!-- Current Target Auth Status -->
         <div class="auth-status-box" data-testid="quick-auth-status">
           <div class="auth-status-title">Target Environment Auth:</div>

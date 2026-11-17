@@ -75,6 +75,8 @@ describe('AuthHeader.svelte Component', () => {
       expect(screen.getByTestId('auth-username')).toHaveTextContent('rhody_mapper');
       expect(screen.getByText('312 changesets')).toBeInTheDocument();
       expect(screen.getByTestId('auth-logout-btn')).toHaveTextContent('Log out');
+      expect(screen.getByTestId('auth-messages-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('auth-msg-count')).toHaveTextContent('0');
     });
 
     // Test clicking logout button
@@ -83,6 +85,54 @@ describe('AuthHeader.svelte Component', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('auth-login-card')).toBeInTheDocument();
+    });
+  });
+
+  it('renders unread message badge and opens inbox when clicked', async () => {
+    // @ts-ignore
+    globalThis.browser.tabs = {
+      create: vi.fn(),
+    };
+
+    // @ts-ignore
+    globalThis.browser.storage.local.get = vi.fn().mockResolvedValue({
+      'browsm_auth_osm-prod': {
+        isAuthenticated: true,
+        user: {
+          id: 42,
+          username: 'rhody_mapper',
+          accountCreated: '2021-05-10',
+          changesetCount: 312,
+          unreadMessagesCount: 5,
+        },
+        token: {
+          accessToken: 'valid_token',
+          tokenType: 'Bearer',
+          scope: 'read_prefs write_api write_notes',
+          createdAt: 1700000000,
+        },
+        isLoading: false,
+      },
+    });
+
+    await authStore.init();
+
+    render(AuthHeader);
+
+    await waitFor(() => {
+      const msgBtn = screen.getByTestId('auth-messages-btn');
+      expect(msgBtn).toBeInTheDocument();
+      expect(msgBtn).toHaveClass('has-unread');
+      expect(screen.getByTestId('auth-msg-count')).toHaveTextContent('5');
+      expect(msgBtn).toHaveAttribute('title', '5 unread messages on OpenStreetMap (click to open inbox)');
+    });
+
+    const msgBtn = screen.getByTestId('auth-messages-btn');
+    await fireEvent.click(msgBtn);
+
+    // @ts-ignore
+    expect(globalThis.browser.tabs.create).toHaveBeenCalledWith({
+      url: 'https://www.openstreetmap.org/messages/inbox',
     });
   });
 });

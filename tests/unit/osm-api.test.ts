@@ -4,6 +4,7 @@ import {
   parseXml,
   serializeTagsXml,
   getUserDetails,
+  checkUserMessages,
   createChangeset,
   closeChangeset,
   createNode,
@@ -51,6 +52,10 @@ describe('OpenStreetMap API 0.6 Client (osm-api)', () => {
     <roles>
       <role>moderator</role>
     </roles>
+    <messages>
+      <received count="12" unread="3"/>
+      <sent count="5"/>
+    </messages>
   </user>
 </osm>`;
 
@@ -73,9 +78,63 @@ describe('OpenStreetMap API 0.6 Client (osm-api)', () => {
       expect(user.id).toBe(987654);
       expect(user.username).toBe('coastal_mapper');
       expect(user.changesetCount).toBe(425);
+      expect(user.unreadMessagesCount).toBe(3);
+      expect(user.totalMessagesCount).toBe(12);
       expect(user.description).toBe('Local mapper in Newport');
       expect(user.img).toBe('https://example.com/avatar.png');
       expect(user.roles).toEqual(['moderator']);
+    });
+
+    it('correctly parses zero unread messages and missing message block', async () => {
+      const sampleZeroUnread = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <user id="100" display_name="mapper_zero" account_created="2021-01-01T00:00:00Z">
+    <messages>
+      <received count="10" unread="0"/>
+    </messages>
+  </user>
+</osm>`;
+      const mockFetch1 = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => sampleZeroUnread,
+      });
+
+      const user1 = await getUserDetails(token, baseUrl, mockFetch1);
+      expect(user1.unreadMessagesCount).toBe(0);
+      expect(user1.totalMessagesCount).toBe(10);
+
+      const sampleNoMessages = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <user id="200" display_name="mapper_legacy" account_created="2018-01-01T00:00:00Z">
+  </user>
+</osm>`;
+      const mockFetch2 = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => sampleNoMessages,
+      });
+
+      const user2 = await getUserDetails(token, baseUrl, mockFetch2);
+      expect(user2.unreadMessagesCount).toBeUndefined();
+      expect(user2.totalMessagesCount).toBeUndefined();
+    });
+
+    it('checkUserMessages returns unread and total count', async () => {
+      const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <user id="300" display_name="mapper_summary" account_created="2022-01-01T00:00:00Z">
+    <messages>
+      <received count="20" unread="5"/>
+    </messages>
+  </user>
+</osm>`;
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => sampleXml,
+      });
+
+      const summary = await checkUserMessages(token, baseUrl, mockFetch);
+      expect(summary.unreadCount).toBe(5);
+      expect(summary.totalCount).toBe(20);
     });
 
     it('throws error when user details endpoint fails', async () => {

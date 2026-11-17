@@ -513,6 +513,42 @@
       unwatchSchema();
     };
   });
+
+  /**
+   * Periodic OSM user messages checking while the sidebar is open.
+   * Checks immediately on mount / authentication and polls at the user-configured interval.
+   * Automatically clears timer when the sidebar is unmounted or closed.
+   */
+  $effect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const intervalMinutes = settingsStore.messagePollIntervalMinutes ?? 10;
+
+    const checkMessages = async () => {
+      if (authStore.isAuthenticated && authStore.token?.accessToken) {
+        try {
+          await authStore.refreshUserDetails();
+        } catch (err) {
+          console.debug('[Browsm] Periodic message polling error:', err);
+        }
+      }
+    };
+
+    if (authStore.isAuthenticated) {
+      checkMessages();
+    }
+
+    if (intervalMinutes > 0) {
+      const intervalMs = intervalMinutes * 60 * 1000;
+      timer = setInterval(checkMessages, intervalMs);
+    }
+
+    return () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+  });
 </script>
 
 <div class="sidebar">

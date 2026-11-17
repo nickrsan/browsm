@@ -14,11 +14,13 @@ import { getEndpointConfig, type EndpointConfig } from '@/types/settings';
 import {
   getStoredAuthState,
   getAllStoredAuthStates,
+  saveStoredAuthState,
   loginWithOsm,
   logoutOsm as logoutService,
   AUTH_STORAGE_KEY_PREFIX,
   LEGACY_AUTH_STORAGE_KEY,
 } from '@/services/osm-auth';
+import { getUserDetails } from '@/services/osm-api';
 import { settingsStore } from './settings.svelte';
 
 class AuthStore {
@@ -150,6 +152,36 @@ class AuthStore {
       throw err;
     } finally {
       this._isLoading = false;
+    }
+  }
+
+  /**
+   * Refreshes user profile details (including changeset count and unread messages count)
+   * from the OSM API for the active or specified endpoint and updates persistent state.
+   */
+  async refreshUserDetails(endpointId?: string, customFetch: typeof fetch = fetch): Promise<OsmUserDetails | undefined> {
+    const targetId = endpointId || this.activeTargetId;
+    const currentState = this.getAuthStateFor(targetId);
+    if (!currentState.isAuthenticated || !currentState.token?.accessToken) {
+      return undefined;
+    }
+
+    const endpointConfig = getEndpointConfig(targetId, settingsStore.customEndpoint);
+    try {
+      const updatedUser = await getUserDetails(currentState.token.accessToken, endpointConfig.apiBaseUrl, customFetch);
+      const updatedState: OsmAuthState = {
+        ...currentState,
+        user: updatedUser,
+      };
+      this._authStates = {
+        ...this._authStates,
+        [targetId]: updatedState,
+      };
+      await saveStoredAuthState(updatedState, targetId);
+      return updatedUser;
+    } catch (err) {
+      console.debug(`[Browsm] Failed to refresh user details for ${targetId}:`, err);
+      return currentState.user;
     }
   }
 

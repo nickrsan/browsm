@@ -48,7 +48,14 @@ When you visit local business websites (restaurants, stores, clinics, bakeries, 
 2. A secure browser authorization window will open directly on `openstreetmap.org`.
 3. Grant permissions for reading preferences, editing map data, and writing notes.
 4. Browsm uses **OAuth 2.0 with PKCE (Proof Key for Code Exchange)** to authenticate directly from your browser without passing credentials through any third-party proxy servers.
-5. Once logged in, your OSM username, avatar, and changeset statistics appear in the header.
+5. Once logged in, your OSM username, avatar, changeset statistics, and message notification indicator appear in the header.
+
+### OpenStreetMap Messages & Periodic Notifications
+When logged in with OpenStreetMap:
+1. **Unread Message Counter**: An envelope icon in the `AuthHeader` displays your current unread message count. If there are new direct messages or changeset comments on OpenStreetMap, the badge highlights in blue with the exact number of unread messages.
+2. **Direct Inbox Click-Through**: Clicking the envelope button immediately opens your OpenStreetMap messages inbox (`https://www.openstreetmap.org/messages/inbox` or your active endpoint's inbox) in a new browser tab.
+3. **Sidebar-Only Polling**: While the sidebar is open, Browsm periodically checks the OSM API for new messages (defaulting to 10-minute intervals). When the sidebar is closed, all timers are cleanly stopped to conserve battery and CPU resources.
+4. **Configurable Polling Interval**: You can customize or disable the message polling interval (options: Disabled, 5m, 10m [default], 15m, 30m, 60m) in the Quick Settings modal (`⚙️`) or in the Full Options Dashboard.
 
 ### Submitting Map Notes (Non-Destructive Suggestions)
 If you discover a missing business, outdated phone number, or incorrect opening hours but do not want to directly edit map geometry:

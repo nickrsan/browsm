@@ -48,6 +48,7 @@ export interface SettingsState {
   customEndpoint?: EndpointConfig;
   defaultChangesetCommentPrefix?: string;
   preferredEditor: PreferredEditor;
+  messagePollIntervalMinutes?: number;
 }
 
 /**
@@ -118,6 +119,7 @@ export const DEFAULT_SETTINGS_STATE: SettingsState = {
   devModeRouting: 'disabled',
   defaultChangesetCommentPrefix: 'Surveyed via Browsm',
   preferredEditor: 'id',
+  messagePollIntervalMinutes: 10,
 };
 
 /**

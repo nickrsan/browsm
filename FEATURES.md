@@ -82,3 +82,8 @@ This registry tracks existing and planned features of the Browsm extension to en
 52. **Automated Changeset Lifecycle Guarantee**: Strict `try...finally` closure guarantee in `ChangesetModal.svelte` and idempotent HTTP 409 handling in `osm-api.ts`, ensuring that all opened changesets are reliably closed after node/way modifications or creation errors.
 53. **PMTiles Protocol Vector Tile Archive Support**: Seamless registration of `pmtiles.Protocol` on `maplibre-gl`, enabling MapLibre to read OpenFreeMap and custom PMTiles vector archives directly.
 54. **Resilient Popup Multi-Key State Loading & Theme Support**: Dedicated tab-specific (`tab_schema_${tabId}`) and global schema state hydration on mount in `App.svelte`, clean viewport styles, and full light/dark mode CSS adaptation.
+
+## Phase 6 Features (Periodic OSM Message Polling & Automated CI/CD Workflows)
+
+55. **OSM Message Notification Badge & Sidebar Polling**: Periodic polling of the OpenStreetMap API for user direct messages and changeset discussions while the sidebar is open (defaulting to 10-minute intervals, user-configurable to 5, 10, 15, 30, 60 minutes or disabled), featuring an interactive envelope icon with unread message counter badge in `AuthHeader` that opens the user's OSM inbox on click.
+56. **GitHub Actions Pull Request Test & Build Workflow**: Automated CI/CD pipeline triggered on pull requests and pushes to `main`/`master` running TypeScript/Svelte checks (`pnpm check`), Vitest unit/component/integration tests (`pnpm test`), and full Chrome & Firefox Manifest V3 production builds.

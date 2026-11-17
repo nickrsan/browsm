@@ -35,7 +35,21 @@ describe('SettingsStore (Svelte 5 Runes)', () => {
     expect(settingsStore.devModeRouting).toBe('disabled');
     expect(settingsStore.isDevMode).toBe(false);
     expect(settingsStore.preferredEditor).toBe('id');
+    expect(settingsStore.messagePollIntervalMinutes).toBe(10);
     expect(settingsStore.activeEndpointConfig.apiBaseUrl).toBe('https://api.openstreetmap.org/api/0.6');
+  });
+
+  it('updates message polling interval and persists to storage', async () => {
+    await settingsStore.setMessagePollInterval(15);
+    expect(settingsStore.messagePollIntervalMinutes).toBe(15);
+
+    // Verify persistence
+    const saved = mockStorage[SETTINGS_STORAGE_KEY] as Record<string, unknown>;
+    expect(saved?.messagePollIntervalMinutes).toBe(15);
+
+    // Can set to 0 (disabled)
+    await settingsStore.setMessagePollInterval(0);
+    expect(settingsStore.messagePollIntervalMinutes).toBe(0);
   });
 
   it('updates active endpoint and derives correct config', async () => {

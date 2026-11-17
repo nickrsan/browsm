@@ -1,0 +1,49 @@
+name: Test and Build Verification
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run Tests & Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run TypeScript & Svelte check
+        run: pnpm check
+
+      - name: Run Vitest Unit and Integration Tests
+        run: pnpm test
+
+      - name: Build Chrome Extension (MV3)
+        run: pnpm build
+
+      - name: Build Firefox Extension (MV3)
+        run: pnpm build:firefox
