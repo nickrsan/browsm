@@ -24,21 +24,12 @@ export default defineConfig({
       "https://*.openhistoricalmap.org/*",
     ],
     content_security_policy: {
-      extension_pages: "script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://*.openfreemap.org https://*.openfreemap.com; connect-src 'self' https://*.openstreetmap.org https://nominatim.openstreetmap.org https://*.openfreemap.org https://*.openfreemap.com https://*.openhistoricalmap.org;",
+      extension_pages: "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://*.openfreemap.org https://*.openfreemap.com; connect-src 'self' https://*.openstreetmap.org https://nominatim.openstreetmap.org https://*.openfreemap.org https://*.openfreemap.com https://*.openhistoricalmap.org;",
     },
     browser_specific_settings: {
       gecko: {
         id: "browsm@nicksantos.com"
       }
-    },
-    declarative_net_request: {
-      rule_resources: [
-        {
-          id: "header-rules",
-          enabled: true,
-          path: "rules.json"
-        }
-      ]
     },
     sidebar_action: {
       default_title: "Browsm",

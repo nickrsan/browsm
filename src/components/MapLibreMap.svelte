@@ -1,16 +1,27 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import * as pmtiles from 'pmtiles';
+  import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
   import {
     Map as MapLibreInstance,
     Marker,
     NavigationControl,
     Popup,
     addProtocol,
+    setWorkerUrl,
     type GeoJSONSource,
   } from 'maplibre-gl';
   import type { Feature, FeatureCollection, Polygon } from 'geojson';
   import 'maplibre-gl/dist/maplibre-gl.css';
+
+  // Configure MapLibre Web Worker URL so it resolves within the extension environment (Firefox & Chromium)
+  try {
+    if (typeof setWorkerUrl === 'function' && maplibreWorkerUrl) {
+      setWorkerUrl(maplibreWorkerUrl);
+    }
+  } catch {
+    // Ignore if not supported in environment
+  }
   import {
     OPENFREEMAP_STYLES,
     type MapMarker,
