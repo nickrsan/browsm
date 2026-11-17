@@ -89,12 +89,17 @@ export default defineBackground(() => {
         name: firstResult.name || cleanQuery,
         lat: parsedLat,
         lon: parsedLon,
+        osmId: firstResult.osm_id,
+        osmType: firstResult.osm_type as string,
       },
       nearbyElements
     );
 
     const osmIdString = matchResult.matchedElement ? String(matchResult.matchedElement.id) : String(firstResult.osm_id);
     const osmTypeString = matchResult.matchedElement ? matchResult.matchedElement.type : (firstResult.osm_type as string);
+    const matchedElementId = matchResult.matchedElement
+      ? `${matchResult.matchedElement.type}/${matchResult.matchedElement.id}`
+      : undefined;
 
     // Step 4: Persist session and notify UI
     const searchSession: SearchSessionState = {
@@ -102,7 +107,7 @@ export default defineBackground(() => {
       source,
       coordinates: { lat: parsedLat, lon: parsedLon },
       status: matchResult.matchStatus === 'no_match' ? 'no_match' : 'matched',
-      matchedElementId: matchResult.matchedElement ? `${matchResult.matchedElement.type}/${matchResult.matchedElement.id}` : undefined,
+      matchedElementId,
       nearbyElements,
     };
 
@@ -117,6 +122,8 @@ export default defineBackground(() => {
         osm_type: osmTypeString,
         full_response: firstResult,
         timestamp: Date.now(),
+        nearbyElements,
+        matchedElementId,
       },
     });
 
@@ -127,6 +134,8 @@ export default defineBackground(() => {
       osm_id: osmIdString,
       osm_type: osmTypeString,
       full_response: firstResult,
+      nearbyElements,
+      matchedElementId,
     });
 
     messaging.sendMessage('updateIcon', { state: 'active' });

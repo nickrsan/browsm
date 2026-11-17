@@ -19,8 +19,13 @@ export default defineConfig({
       "https://*.openstreetmap.org/*",
       "https://nominatim.openstreetmap.org/*",
       "https://tiles.openfreemap.org/*",
+      "https://*.openfreemap.org/*",
+      "https://*.openfreemap.com/*",
       "https://*.openhistoricalmap.org/*",
     ],
+    content_security_policy: {
+      extension_pages: "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://*.openstreetmap.org https://nominatim.openstreetmap.org https://*.openfreemap.org https://*.openfreemap.com https://*.openhistoricalmap.org;",
+    },
     browser_specific_settings: {
       gecko: {
         id: "browsm@nicksantos.com"

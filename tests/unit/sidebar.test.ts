@@ -117,6 +117,55 @@ describe('Sidebar.svelte (Svelte 5 Workspace)', () => {
     expect(screen.getAllByText(/The Ocean Cafe, Newport, RI/).length).toBeGreaterThan(0);
   });
 
+  it('selects matched live OSM element and populates live OSM tags when nearbyElements is provided', async () => {
+    // @ts-ignore
+    globalThis.browser.storage.local.get = vi.fn().mockResolvedValue({
+      lookupState: {
+        state: 'response',
+        lat: 41.4901,
+        lon: -71.3128,
+        display_name: 'The Rusty Anchor Tavern, Newport, RI',
+        osm_id: '98765',
+        full_response: {
+          place_id: 12345,
+          osm_type: 'node',
+          osm_id: '98765',
+          lat: '41.4901',
+          lon: '-71.3128',
+          display_name: 'The Rusty Anchor Tavern, Newport, RI',
+        },
+        nearbyElements: [
+          {
+            id: 98765,
+            type: 'node',
+            lat: 41.4901,
+            lon: -71.3128,
+            version: 2,
+            tags: {
+              name: 'The Rusty Anchor Tavern',
+              amenity: 'pub',
+              phone: '+1 401 555 1234',
+              website: 'https://rustyanchornewport.com',
+            },
+          },
+        ],
+        matchedElementId: 'node/98765',
+        timestamp: 100,
+      },
+    });
+
+    render(Sidebar);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tag Comparison Matrix')).toBeInTheDocument();
+      // Ensure live OSM values appear in the matrix instead of 'Not in OSM'
+      expect(screen.getAllByText('The Rusty Anchor Tavern').length).toBeGreaterThan(0);
+      expect(screen.getByText('pub')).toBeInTheDocument();
+      expect(screen.getByText('+1 401 555 1234')).toBeInTheDocument();
+      expect(screen.getByText('https://rustyanchornewport.com')).toBeInTheDocument();
+    });
+  });
+
   it('triggers direct search messaging on form submit', async () => {
     const sendMessageSpy = vi.spyOn(messaging, 'sendMessage').mockResolvedValue(undefined as any);
 

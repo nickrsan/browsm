@@ -3,7 +3,7 @@
  * Defines strict TypeScript payload types for all cross-component messaging in Browsm.
  */
 
-import type { NominatimResult } from './osm';
+import type { NominatimResult, OsmElement } from './osm';
 import type { SchemaOrgPlace } from './schema';
 
 /**
@@ -33,6 +33,8 @@ export interface AdjustMapPayload {
   osm_id: string;
   osm_type?: string;
   full_response: NominatimResult | Record<string, unknown>;
+  nearbyElements?: OsmElement[];
+  matchedElementId?: string;
 }
 
 /**

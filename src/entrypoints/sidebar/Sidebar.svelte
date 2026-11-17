@@ -171,14 +171,21 @@
     lon?: number | string;
     display_name?: string;
     osm_id?: string;
+    osm_type?: string;
     full_response?: NominatimResult | Record<string, unknown>;
     timestamp?: number;
+    nearbyElements?: OsmElement[];
+    matchedElementId?: string;
   }) {
     if (payload.timestamp && payload.timestamp <= lastTimestamp) {
       return;
     }
     if (payload.timestamp) {
       lastTimestamp = payload.timestamp;
+    }
+
+    if (payload.nearbyElements) {
+      nearbyElementsList = payload.nearbyElements;
     }
 
     if (payload.state === 'searching') {
@@ -201,6 +208,17 @@
         mapZoom = 16;
         populateMapElements(nearbyElementsList, parsedLat, parsedLon, name, payload.osm_id);
 
+        // Check if an explicit matchedElementId was resolved
+        if (payload.matchedElementId && nearbyElementsList.length > 0) {
+          const directMatch = nearbyElementsList.find(
+            (el) => `${el.type}/${el.id}` === payload.matchedElementId || String(el.id) === payload.matchedElementId
+          );
+          if (directMatch) {
+            selectElement(directMatch);
+            return;
+          }
+        }
+
         // Find candidate match or initialize new node
         if (nearbyElementsList.length > 0) {
           const matchResult = findBestMatch(
@@ -208,6 +226,8 @@
               name: name || detectedPagePlace?.name,
               lat: parsedLat,
               lon: parsedLon,
+              osmId: payload.osm_id,
+              osmType: payload.osm_type,
               phone: detectedPagePlace?.telephone,
               website: detectedPagePlace?.url,
             },
@@ -215,6 +235,13 @@
           );
           if (matchResult.matchedElement) {
             selectElement(matchResult.matchedElement);
+          } else if (payload.osm_id) {
+            const idMatch = nearbyElementsList.find((el) => String(el.id) === String(payload.osm_id));
+            if (idMatch) {
+              selectElement(idMatch);
+            } else {
+              selectElement(null);
+            }
           } else {
             selectElement(null);
           }
@@ -415,8 +442,11 @@
             lon?: number | string;
             display_name?: string;
             osm_id?: string;
+            osm_type?: string;
             full_response?: NominatimResult | Record<string, unknown>;
             timestamp?: number;
+            nearbyElements?: OsmElement[];
+            matchedElementId?: string;
           };
         };
         if (storage?.currentSchema) {
@@ -426,7 +456,15 @@
           nearbyElementsList = storage.searchSession.nearbyElements;
         }
         if (storage?.lookupState) {
-          updateFromPayload(storage.lookupState);
+          updateFromPayload({
+            ...storage.lookupState,
+            nearbyElements:
+              storage.lookupState.nearbyElements ||
+              storage.searchSession?.nearbyElements ||
+              nearbyElementsList,
+            matchedElementId:
+              storage.lookupState.matchedElementId || storage.searchSession?.matchedElementId,
+          });
         }
       })
       .catch((err) => {

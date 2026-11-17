@@ -320,6 +320,8 @@ export function findBestMatch(
     website?: string;
     lat?: number;
     lon?: number;
+    osmId?: number | string;
+    osmType?: string;
     tags?: Record<string, string>;
   },
   candidates: OsmElement[]
@@ -333,10 +335,32 @@ export function findBestMatch(
   for (const candidate of candidates) {
     let score = 0;
 
-    // 1. Name match (up to 0.45)
-    if (target.name && candidate.tags.name) {
-      const nameSim = calculateStringSimilarity(target.name, candidate.tags.name);
-      score += nameSim * 0.45;
+    // 0. Direct OSM ID match (immediate exact match)
+    if (target.osmId !== undefined && target.osmId !== '' && String(candidate.id) === String(target.osmId)) {
+      if (!target.osmType || candidate.type === target.osmType) {
+        score += 1.0;
+      }
+    }
+
+    // 1. Name match across primary and alternate name tags (up to 0.45)
+    if (target.name) {
+      const nameCandidates = [
+        candidate.tags.name,
+        candidate.tags['name:en'],
+        candidate.tags.alt_name,
+        candidate.tags.official_name,
+        candidate.tags.brand,
+        candidate.tags.operator,
+      ].filter((val): val is string => Boolean(val));
+
+      let maxNameSim = 0;
+      for (const candName of nameCandidates) {
+        const sim = calculateStringSimilarity(target.name, candName);
+        if (sim > maxNameSim) {
+          maxNameSim = sim;
+        }
+      }
+      score += maxNameSim * 0.45;
     }
 
     // 2. Proximity match (up to 0.35)
@@ -368,6 +392,16 @@ export function findBestMatch(
       const w2 = candidate.tags.website.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '');
       if (w1 && w2 && (w1 === w2 || w1.includes(w2) || w2.includes(w1))) {
         score += 0.10;
+      }
+    }
+
+    // 5. Category / tag overlap (amenity, shop, tourism, leisure, building) (up to 0.10)
+    if (target.tags) {
+      const categoryKeys = ['amenity', 'shop', 'tourism', 'leisure', 'office', 'craft', 'healthcare', 'building'];
+      for (const key of categoryKeys) {
+        if (target.tags[key] && candidate.tags[key] && target.tags[key] === candidate.tags[key]) {
+          score += 0.05;
+        }
       }
     }
 

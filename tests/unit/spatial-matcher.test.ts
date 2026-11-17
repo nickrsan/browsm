@@ -155,6 +155,65 @@ describe('Spatial Matcher Service', () => {
       expect(match.matchedElement?.id).toBe(1);
     });
 
+    it('identifies exact match by direct osmId and osmType', () => {
+      const candidates: OsmElement[] = [
+        {
+          id: 9999,
+          type: 'node',
+          lat: 41.4901,
+          lon: -71.3128,
+          version: 1,
+          tags: { amenity: 'pub', name: 'Anchor Tavern' },
+        },
+        {
+          id: 8888,
+          type: 'node',
+          lat: 41.4902,
+          lon: -71.3129,
+          version: 1,
+          tags: { amenity: 'restaurant', name: 'Other Place' },
+        },
+      ];
+
+      const match = findBestMatch(
+        {
+          osmId: '9999',
+          osmType: 'node',
+          lat: 41.4901,
+          lon: -71.3128,
+        },
+        candidates
+      );
+
+      expect(match.matchStatus).toBe('exact_match');
+      expect(match.matchedElement?.id).toBe(9999);
+    });
+
+    it('matches candidate using alternate name tags like brand or alt_name', () => {
+      const candidates: OsmElement[] = [
+        {
+          id: 55,
+          type: 'node',
+          lat: 41.4901,
+          lon: -71.3128,
+          version: 1,
+          tags: { brand: 'Subway', name: 'Subway #1234', amenity: 'fast_food' },
+        },
+      ];
+
+      const match = findBestMatch(
+        {
+          name: 'Subway',
+          lat: 41.4901,
+          lon: -71.3128,
+        },
+        candidates
+      );
+
+      expect(match.matchStatus).toBe('exact_match');
+      expect(match.matchedElement?.id).toBe(55);
+    });
+
     it('returns no_match when candidate list is empty', () => {
       const match = findBestMatch({ name: 'New Cafe', lat: 41.49, lon: -71.31 }, []);
       expect(match.matchStatus).toBe('no_match');

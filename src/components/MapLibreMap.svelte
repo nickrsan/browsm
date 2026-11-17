@@ -153,7 +153,7 @@
   /**
    * Initializes MapLibre GL instance with OpenFreeMap vector styles and responsive lifecycle.
    */
-  $effect(() => {
+  onMount(() => {
     if (!mapContainer || typeof window === 'undefined') return;
 
     let map: MapLibreInstance | null = null;
