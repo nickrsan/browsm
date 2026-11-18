@@ -10,22 +10,31 @@
     "build": "wxt build",
     "build:firefox": "wxt build -b firefox --mv3",
     "zip": "wxt zip",
-    "zip:firefox": "wxt zip -b firefox",
+    "zip:firefox": "wxt zip -b firefox --mv3",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/svelte": "^5.4.2",
     "@tsconfig/svelte": "^5.0.7",
-    "@types/leaflet": "^1.9.21",
+    "@types/geojson": "^7946.0.16",
     "@wxt-dev/module-svelte": "^2.0.4",
+    "jsdom": "^31.0.1",
     "svelte": "^5.49.2",
     "svelte-check": "^4.3.6",
     "tslib": "^2.8.1",
     "typescript": "^5.9.3",
+    "vitest": "^5.1.0",
     "wxt": "^0.20.17"
   },
   "dependencies": {
     "@webext-core/messaging": "^2.3.0",
-    "leaflet": "^1.9.4"
+    "maplibre-gl": "^6.18.0",
+    "pmtiles": "^4.5.0"
   }
 }

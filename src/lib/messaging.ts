@@ -1,30 +1,22 @@
 import { defineExtensionMessaging } from '@webext-core/messaging';
-
-interface UpdateEditorPayload {
-  state: 'searching' | 'instructions' | 'response';
-}
-
-interface AdjustMapPayload {
-  lat: number;
-  lon: number;
-  display_name: string;
-  osm_id: string;
-  full_response: any;
-}
-
-interface UpdateIconPayload {
-  state: 'active' | 'inactive' | 'no-address';
-}
-
-interface ShowMapPayload {
-  display_name: string;
-  lat: number;
-  lon: number;
-}
+import type {
+  UpdateEditorPayload,
+  AdjustMapPayload,
+  UpdateIconPayload,
+  ShowMapPayload,
+  SchemaDetectedPayload,
+  PageDomainChangedPayload,
+  ResetSidebarPayload,
+  SearchPoiPayload,
+} from '../types/messaging';
 
 export const messaging = defineExtensionMessaging<{
   updateEditor(payload: UpdateEditorPayload): void;
   adjustMap(payload: AdjustMapPayload): void;
   updateIcon(payload: UpdateIconPayload): void;
   showMap(payload: ShowMapPayload): void;
+  schemaDetected(payload: SchemaDetectedPayload): void;
+  pageDomainChanged(payload: PageDomainChangedPayload): void;
+  resetSidebar(payload: ResetSidebarPayload): void;
+  searchPoi(payload: SearchPoiPayload): void;
 }>();

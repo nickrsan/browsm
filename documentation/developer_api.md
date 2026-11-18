@@ -1,0 +1,263 @@
+# Browsm Developer & API Documentation
+
+This document describes the architectural layout, TypeScript data models, services, messaging protocols, testing strategy, and coding standards for developers contributing to the Browsm extension.
+
+---
+
+## 1. Project Architecture
+
+Browsm is built on the [WXT](https://wxt.dev) framework and [Svelte 5](https://svelte.dev), using standard WebExtension APIs across Firefox and Chromium platforms.
+
+### Directory Structure
+```
+browsm/
+├── src/
+│   ├── components/
+│   │   ├── MapLibreMap.svelte # Encapsulated MapLibre vector map component
+│   │   ├── AuthHeader.svelte  # OSM OAuth user card & login/logout header
+│   │   └── NoteModal.svelte   # Non-destructive Map Note creation dialog
+│   ├── entrypoints/
+│   │   ├── background.ts      # Unified background service worker
+│   │   ├── content/           # In-page Schema.org & Microdata extractor
+│   │   ├── popup/             # Action popup UI & quick note trigger
+│   │   └── sidebar/           # Sidebar workspace & Vector Map
+│   ├── services/
+│   │   ├── schema-parser.ts   # JSON-LD, Microdata & OpenGraph extraction
+│   │   ├── tag-normalizer.ts  # Address, phone (E.123), website & hours normalizer
+│   │   ├── geocoding.ts       # Cached Nominatim geocoding client
+│   │   ├── spatial-matcher.ts # OSM API 0.6 bbox parser & candidate matcher
+│   │   ├── osm-auth.ts        # Zero-server OAuth 2.0 PKCE client
+│   │   ├── osm-api.ts         # OSM API 0.6 changeset, node & way transaction client
+│   │   └── osm-notes.ts       # OpenStreetMap Map Notes submission service
+│   ├── stores/
+│   │   └── auth.svelte.ts     # Svelte 5 reactive authentication store
+│   ├── lib/
+│   │   └── messaging.ts       # Type-safe extension messaging hub
+│   └── types/                 # Centralized TypeScript definitions
+│       ├── osm.ts             # OSM elements & Nominatim responses
+│       ├── map.ts             # Vector map models & OpenFreeMap styles
+│       ├── schema.ts          # Schema.org place representations
+│       ├── diff.ts            # Tag diffing & match session state
+│       ├── auth.ts            # OAuth tokens, user profiles, changesets & notes
+│       ├── messaging.ts       # Payload definitions
+│       └── index.ts           # Re-exports
+├── tests/
+│   ├── setup.ts               # Test environment setup & WebExt polyfills
+│   └── unit/                  # Vitest unit & component test suites
+├── wxt.config.ts              # Manifest & build configuration
+└── vitest.config.ts           # Test runner configuration
+```
+
+---
+
+## 2. Core Services API
+
+### Schema Parser (`src/services/schema-parser.ts`)
+- `extractSchemaFromDocument(doc: Document, sourceUrl: string): SchemaOrgPlace | null`
+  - Scans `<script type="application/ld+json">` (direct, arrays, and `@graph` structures), HTML5 Microdata (`[itemscope][itemtype]`), and OpenGraph fallback meta tags.
+- `isSupportedSchemaType(typeValue: unknown): boolean`
+  - Validates whether a schema `@type` matches supported local business / place categories.
+
+### Tag Normalizer (`src/services/tag-normalizer.ts`)
+- `convertSchemaPlaceToOsmTags(place: SchemaOrgPlace): OsmTags`
+  - Converts a structured `SchemaOrgPlace` into standardized OSM tags.
+- `normalizeAddressToTags(address?: SchemaOrgAddress): OsmTags`
+  - Splits street strings into `addr:housenumber` and `addr:street`, maps `addr:city`, `addr:state`, `addr:postcode`, `addr:country`.
+- `normalizePhoneToE123(rawPhone?: string): string | undefined`
+  - Normalizes phone numbers to international standard format with proper country prefixes.
+- `canonicalizePhoneDigits(rawPhone?: string): string | undefined`
+  - Extracts normalized dialable digits (normalizing North American 10-digit to 11-digit with country code 1) for semantic phone comparison.
+- `normalizeWebsite(rawUrl?: string): string | undefined`
+  - Validates and normalizes website URLs with `https://` protocol.
+- `canonicalizeWebsiteUrl(rawUrl?: string): string | undefined`
+  - Canonicalizes URLs by stripping trailing slashes, lowercasing protocol and host, and standardizing empty root paths.
+- `isMinorTagDifference(key: string, sourceVal?: string, osmVal?: string): boolean`
+  - Determines if a discrepancy between source and live OSM values is cosmetic (such as trailing slashes in URLs, phone number parentheses/hyphens/spaces, or redundant whitespace).
+- `validateOsmTag(key: string, value: string): { isValid: boolean; warning?: string }`
+  - Validates OSM tag keys and values in real time, checking for whitespace, international phone prefix requirements, URL protocols, and standard boolean enum values.
+- `COMMON_OSM_TAG_KEYS: string[]`
+  - Recommended list of common OSM POI keys used for autocomplete suggestions.
+
+### External Editors Launcher (`src/services/external-editors.ts`)
+- `getEditorUrl(editor: PreferredEditor, options: EditorLaunchOptions): string`
+  - Constructs URL for opening location or entity in iD, Rapid, or JOSM Remote Control.
+- `launchEditor(editor: PreferredEditor, options: EditorLaunchOptions, customFetch?: typeof fetch): Promise<EditorLaunchResult>`
+  - Dispatches editor launch via `window.open` for web-based editors (iD, Rapid) or triggers JOSM Remote Control HTTP GET on `http://127.0.0.1:8111/load_and_zoom`.
+
+### Geocoding Service (`src/services/geocoding.ts`)
+- `geocodeQuery(query: string, options?: GeocodeOptions): Promise<NominatimResult[]>`
+  - Free-form address search with User-Agent enforcement and 24-hour local storage caching (`browser.storage.local`).
+- `geocodeStructured(params: Record<string, string>, options?: GeocodeOptions): Promise<NominatimResult[]>`
+  - Structured discrete parameter geocoding.
+- `clearGeocodingCache(): Promise<void>`
+  - Purges all cached geocoding records from local storage.
+
+### Spatial Matcher Service (`src/services/spatial-matcher.ts`)
+- `hasMeaningfulTags(element?: { tags?: Record<string, string> } | null): boolean`
+  - Validates whether an OSM element contains descriptive physical/POI tags, excluding elements with no tags or with only internal metadata keys (`created_by`, `source`, `source:*`, `tiger:*`, `gnis:*`, `attribution`).
+- `filterAndSortNearbyElements(elements: OsmElement[], centerLat?: number, centerLon?: number, maxDistanceMeters?: number): OsmElement[]`
+  - Filters out untagged OSM elements and items beyond the configured search radius (defaulting to 50 meters), prioritizing tagged point nodes before area ways and relations, secondary-sorted by distance.
+- `fetchOsmElementsInBbox(bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number }, baseUrl?: string, customFetch?: typeof fetch): Promise<OsmElement[]>`
+  - Queries `/api/0.6/map?bbox=...` on the active configured API base URL (supporting OpenStreetMap Production, OSM Dev Sandbox, OpenHistoricalMap, or Custom endpoints) and parses both standalone `<node>` elements and `<way>` building structures with geometry centroids.
+- `findBestMatch(target: { name?: string; phone?: string; website?: string; lat?: number; lon?: number; osmId?: number | string; osmType?: string }, candidates: OsmElement[]): SpatialMatchResult`
+  - Scores candidates using direct OSM ID matching, Sørensen-Dice name similarity across multiple name tags (`name`, `name:en`, `alt_name`, `official_name`, `brand`, `operator`), coordinate distance, phone, website, and category tags.
+- `generateTagDiff(sourceTags: Record<string, string>, targetElement?: OsmElement, sourceOrigin?: string, sourceNote?: string): TagDiffItem[]`
+  - Generates itemized diffs between page metadata tags and live OSM element tags, categorizes cosmetic formatting discrepancies as `minor_difference` (ignored by default with OSM value preserved), attaches provenance metadata, and applies 3-tier sorting (staged changes top, minor/ignored differences middle, identical tags bottom).
+
+### Multi-Server Nominatim & Target API Resolution Workflow
+- **Initial Geocoding**: Nominatim (`nominatim.openstreetmap.org`) is queried for initial geographic coordinates (`lat`, `lon`), bounding box, and place name query.
+- **Active API Confirmation**: Because Nominatim indexes the production database, any production `osm_id` returned by Nominatim is not assumed to exist when targeting the Dev API or custom servers. The background worker queries `GET /api/0.6/map?bbox=...` against the active configured API endpoint (e.g., `https://master.apis.dev.openstreetmap.org/api/0.6`).
+- **Entity Verification**: If a matching entity exists on the active server, its true server-specific Node ID, version, and tags are loaded. If no entity exists on the active server, the POI is cleanly presented as a new candidate (`selectedElement = null`), ensuring that subsequent changesets create a new node on that server rather than attempting to update a non-existent production ID.
+
+### OAuth 2.0 PKCE Client (`src/services/osm-auth.ts`)
+- `getAuthStorageKey(endpointId?: string): string`
+  - Generates namespaced storage key (e.g. `browsm_auth_osm-prod`, `browsm_auth_osm-dev`, `browsm_auth_openhistoricalmap`).
+- `getStoredAuthState(endpointId?: string): Promise<OsmAuthState>`
+  - Retrieves stored auth state for a specific endpoint with transparent legacy key migration.
+- `saveStoredAuthState(state: OsmAuthState, endpointId?: string): Promise<void>`
+  - Persists token and profile details under endpoint-isolated storage key, deep-cloning to a plain POJO to avoid Firefox `DataCloneError` on Svelte 5 reactive Proxies.
+- `clearStoredAuthState(endpointId?: string): Promise<void>`
+  - Clears credentials for the specified endpoint.
+- `getAllStoredAuthStates(): Promise<Record<string, OsmAuthState>>`
+  - Retrieves all active auth states across configured endpoints.
+- `generateCodeVerifier(length?: number): string`
+  - Generates cryptographically secure random string for RFC 7636 PKCE.
+- `generateCodeChallenge(verifier: string): Promise<string>`
+  - Computes SHA-256 Base64URL challenge using standard Web Cryptography API (`crypto.subtle`).
+- `buildAuthorizationUrl(config: OsmAuthConfig, codeChallenge: string, state: string): string`
+  - Generates OpenStreetMap OAuth 2.0 authorization URL.
+- `exchangeCodeForToken(config: OsmAuthConfig, code: string, codeVerifier: string): Promise<OsmAuthToken>`
+  - Exchanges authorization code for bearer access token.
+- `loginWithOsm(configOverride?: Partial<OsmAuthConfig>, customFetch?: typeof fetch, endpointId?: string): Promise<OsmAuthState>`
+  - Launches `browser.identity.launchWebAuthFlow`, completes token exchange, fetches user profile, and persists state in `browser.storage.local` under target endpoint ID.
+- `logoutOsm(endpointId?: string): Promise<void>`
+  - Clears stored authentication state for the specified endpoint.
+
+### Centralized Endpoint Resolver (`src/services/endpoint-resolver.ts`)
+- `resolveApiEndpoint(operationType: 'read' | 'write', customSettings?: SettingsState, customAuthMap?: Record<string, OsmAuthState>): Promise<ResolvedEndpoint>`
+  - Resolves target API base URL, OAuth configuration, and credentials based on operation type and developer mode routing flags.
+- `resolveEndpointSync(operationType: 'read' | 'write', settings: SettingsState, authStateMap: Record<string, OsmAuthState>): ResolvedEndpoint`
+  - Synchronous resolver utility executing the split-routing decision matrix.
+- `getEndpointBadgeInfo(settings: SettingsState): EndpointBadgeInfo`
+  - Generates badge text, color variant, and tooltip for headers (`DEV: WRITES ONLY`, `DEV: FULL`, `OHM`, `CUSTOM`).
+
+### Reactive Settings Store (`src/stores/settings.svelte.ts`)
+- `settingsStore`: Svelte 5 runes-powered singleton class managing:
+  - `activeEndpointId`: Current target preset or custom endpoint ID.
+  - `devModeRouting`: Granular routing mode (`disabled`, `writes_only`, `reads_and_writes`).
+  - `customEndpoint`: User-configured custom instance URLs and credentials.
+  - `preferredEditor`: External editor preference (`id`, `rapid`, `josm`).
+  - `messagePollIntervalMinutes`: Interval in minutes for polling OSM messages while sidebar is open (default: `10`, `0` = disabled).
+  - `activeEndpointConfig`: Resolved `EndpointConfig`.
+  - `badgeInfo`: Current `EndpointBadgeInfo`.
+  - `isDevMode`: boolean flag.
+  - `setActiveEndpoint(id)`: Changes target endpoint preset.
+  - `setDevModeRouting(routing)`: Updates developer mode routing mode.
+  - `setCustomEndpoint(config, selectAsActive)`: Saves custom server configuration.
+  - `setMessagePollInterval(minutes)`: Updates and persists the periodic message polling interval.
+  - `resetToDefaults()`: Restores factory configuration.
+
+### OSM API 0.6 Client (`src/services/osm-api.ts`)
+- `OsmApiError`: Specialized Error class containing HTTP `status` code metadata for rate-limiting, missing entity (404), version conflict (409), and authentication error handling.
+- `getUserDetails(accessToken: string, baseUrl?: string, customFetch?: typeof fetch): Promise<OsmUserDetails>`
+  - Queries `GET /api/0.6/user/details` and parses user profile, changeset count, roles, and message statistics (`unreadMessagesCount`, `totalMessagesCount`).
+- `checkUserMessages(accessToken: string, baseUrl?: string, customFetch?: typeof fetch): Promise<{ unreadCount: number; totalCount: number }>`
+  - Convenience wrapper querying user details and returning unread and total message counts.
+- `createChangeset(accessToken: string, params: CreateChangesetParams, baseUrl?: string): Promise<number>`
+  - Opens a new changeset with `created_by=Browsm` and `source=website`.
+- `closeChangeset(accessToken: string, changesetId: number, baseUrl?: string): Promise<void>`
+  - Closes an active changeset.
+- `createNode(accessToken: string, params: CreateNodeParams, baseUrl?: string): Promise<number>`
+  - Creates a new POI node using standard RESTful `POST /api/0.6/nodes` with automatic fallback to legacy `PUT /api/0.6/node/create` and returns the created node ID.
+- `createWay(accessToken: string, params: { changesetId: number; nodeRefs: number[]; tags: OsmTags }, baseUrl?: string): Promise<number>`
+  - Creates a new way structure using standard `POST /api/0.6/ways` with fallback to `PUT /api/0.6/way/create`.
+- `createRelation(accessToken: string, params: { changesetId: number; members: Array<{ type: 'node' | 'way' | 'relation'; ref: number; role?: string }>; tags: OsmTags }, baseUrl?: string): Promise<number>`
+  - Creates a new relation structure using standard `POST /api/0.6/relations` with fallback to `PUT /api/0.6/relation/create`.
+- `uploadOsmChange(accessToken: string, changesetId: number, osmChangeXml: string, baseUrl?: string): Promise<string>`
+  - Uploads atomic diff changesets via `POST /api/0.6/changeset/{id}/upload`.
+- `updateNode(accessToken: string, params: UpdateNodeParams, baseUrl?: string): Promise<number>`
+  - Updates an existing node via `PUT /api/0.6/node/{id}` and returns the incremented version. Throws `OsmApiError` with status 404 if the node ID is not found on the server.
+- `updateWayTags(accessToken: string, params: UpdateWayParams, baseUrl?: string): Promise<number>`
+  - Updates tags on an existing building structure/way via `PUT /api/0.6/way/{id}`, preserving ordered `nodeRefs`. Throws `OsmApiError` with status 404 if the way is not found.
+- `fetchElement(type: OsmElementType, id: number, baseUrl?: string): Promise<OsmElement>`
+  - Fetches XML for any node, way, or relation and parses structured `OsmElement` (including `nodeRefs` for ways).
+
+### Map Notes Service (`src/services/osm-notes.ts`)
+- `createOsmNote(params: CreateNoteParams, accessToken?: string, baseUrl?: string): Promise<OsmNote>`
+  - Submits a non-destructive Map Note via `POST /api/0.6/notes`.
+- `fetchNote(noteId: number, baseUrl?: string): Promise<OsmNote | null>`
+  - Retrieves note status and community comments.
+- `formatNoteTextFromPlace(place: SchemaOrgPlace, suggestedTags?: Record<string, string>, userNote?: string): string`
+  - Formats detected place attributes and suggested tags into a clean note body.
+
+### Map Component (`src/components/MapLibreMap.svelte`)
+- Encapsulates MapLibre GL JS with OpenFreeMap vector styles (`liberty`, `bright`, `positron`, `dark`) and PMTiles protocol registration (`pmtiles.Protocol`).
+- Configured with `setWorkerUrl(maplibreWorkerUrl)` importing `maplibre-gl/dist/maplibre-gl-worker.mjs?url` to bundle and resolve web worker scripts locally within WebExtension environments across Firefox and Chromium, preventing CSP and worker loading failures.
+
+### Browser Platform Manifests & Sidebar Architecture (`src/config/manifest.ts`)
+- `generateManifest(env: ManifestEnv)` generates target-specific WebExtension manifests dynamically:
+  - **Firefox**: Generates `sidebar_action` (`default_panel: "sidebar.html"`, `default_title: "Browsm"`) and excludes the Chromium-only `side_panel` key and `sidePanel` permission, preventing manifest processing warnings in Firefox.
+  - **Chromium**: Generates `side_panel` (`default_path: "sidebar.html"`) and includes the `sidePanel` permission.
+- Unified sidebar activation handlers in `src/entrypoints/background.ts` and `src/entrypoints/popup/App.svelte` prioritize `browser.sidebarAction.open()`, fall back to `browser.sidePanel.open()`, and provide resilient `browser.tabs.create()` fallback navigation.
+
+### Reactive Authentication Store (`src/stores/auth.svelte.ts`)
+- `authStore`: Svelte 5 runes-powered singleton class exposing:
+  - `isAuthenticated`: boolean
+  - `isLoading`: boolean
+  - `user`: `OsmUserDetails | undefined` (including `unreadMessagesCount`)
+  - `token`: `OsmAuthToken | undefined`
+  - `login()`: Initiates OAuth 2.0 PKCE flow.
+  - `logout()`: Clears credentials and resets state.
+  - `refreshUserDetails(endpointId?, customFetch?, force?)`: Fetches fresh user details and unread message count from the OSM API with:
+    - **In-flight request deduplication**: Reuses pending promises across simultaneous callers.
+    - **Cooldown throttling**: Enforces a minimum 30-second interval between API calls unless `force=true`.
+    - **Exponential error backoff**: Automatically backs off (1m, 2m, 4m, 8m, up to 15m) on repeated failures.
+    - **HTTP 429 protection**: Enforces a 5-minute backoff upon receiving rate limit responses.
+    - **Change detection**: Only triggers Svelte reactivity and storage writes if user metadata has changed.
+  - `init()`: Restores authentication state from local storage.
+
+---
+
+## 3. Extension Messaging Protocol (`src/lib/messaging.ts`)
+
+Messaging between background service workers, content scripts, popup, and sidebar uses `@webext-core/messaging` with the following typed contracts:
+
+| Channel / Message | Payload Interface | Description |
+| :--- | :--- | :--- |
+| `updateEditor` | `UpdateEditorPayload` | Updates view mode (`searching`, `instructions`, `response`). |
+| `adjustMap` | `AdjustMapPayload` | Repositions map marker and transmits resolved place attributes. |
+| `updateIcon` | `UpdateIconPayload` | Updates toolbar action icon (`active`, `inactive`, `no-address`). |
+| `showMap` | `ShowMapPayload` | Center map on arbitrary coordinate pair. |
+| `schemaDetected` | `SchemaDetectedPayload` | Emits parsed Schema.org place from content script to background. |
+| `searchPoi` | `SearchPoiPayload` | Initiates text or coordinate search from UI, popup, or context menu selection. |
+
+---
+
+## 4. Svelte 5 Runes Architecture
+
+All components utilize Svelte 5 standard runes:
+- `$state`: Reactive variables for UI state, map coordinates, search queries, and nearby element lists.
+- `$derived`: Reactive computed values for diff summaries and validation checks.
+- `$effect`: Encapsulated lifecycle effects with explicit teardown functions (used for map resize listeners, storage sync, and message subscriptions).
+- `onclick`: Standard DOM event handlers replacing legacy `on:click` directives.
+
+---
+
+## 5. Development & Testing Commands
+
+```bash
+# Type check TypeScript and Svelte components
+npm run check
+
+# Run automated Vitest test suite
+npm test
+
+# Build extension for Chrome MV3
+npm run build
+
+# Build extension for Firefox MV3
+npm run build:firefox
+
+# Create distributable ZIP archive
+npm run zip
+```

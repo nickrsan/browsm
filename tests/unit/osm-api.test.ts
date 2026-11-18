@@ -1,0 +1,562 @@
+import { describe, it, expect, vi } from 'vitest';
+import {
+  escapeXml,
+  parseXml,
+  serializeTagsXml,
+  getUserDetails,
+  checkUserMessages,
+  createChangeset,
+  closeChangeset,
+  createNode,
+  createWay,
+  createRelation,
+  uploadOsmChange,
+  updateNode,
+  updateWayTags,
+  fetchElement,
+  OsmApiError,
+} from '@/services/osm-api';
+
+describe('OpenStreetMap API 0.6 Client (osm-api)', () => {
+  const baseUrl = 'https://api.openstreetmap.org/api/0.6';
+  const token = 'mock_access_token_123';
+
+  describe('XML Helpers', () => {
+    it('escapes XML special characters properly', () => {
+      const raw = `Tom & Jerry <"Bakery" / 'Cafe'>`;
+      const escaped = escapeXml(raw);
+      expect(escaped).toBe('Tom &amp; Jerry &lt;&quot;Bakery&quot; / &apos;Cafe&apos;&gt;');
+    });
+
+    it('serializes tags to XML elements', () => {
+      const tags = {
+        name: 'The Anchor & Compass',
+        amenity: 'pub',
+      };
+      const xml = serializeTagsXml(tags);
+      expect(xml).toContain('<tag k="name" v="The Anchor &amp; Compass"/>');
+      expect(xml).toContain('<tag k="amenity" v="pub"/>');
+    });
+
+    it('parses valid XML string into DOM document', () => {
+      const xml = '<osm version="0.6"><node id="100" lat="41.4" lon="-71.3"/></osm>';
+      const doc = parseXml(xml);
+      expect(doc.querySelector('node')?.getAttribute('id')).toBe('100');
+    });
+  });
+
+  describe('getUserDetails', () => {
+    it('fetches and parses user profile XML', async () => {
+      const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <user id="987654" display_name="coastal_mapper" account_created="2020-05-12T14:30:00Z">
+    <description>Local mapper in Newport</description>
+    <changesets count="425"/>
+    <img href="https://example.com/avatar.png"/>
+    <roles>
+      <role>moderator</role>
+    </roles>
+    <messages>
+      <received count="12" unread="3"/>
+      <sent count="5"/>
+    </messages>
+  </user>
+</osm>`;
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => sampleXml,
+      });
+
+      const user = await getUserDetails(token, baseUrl, mockFetch);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.openstreetmap.org/api/0.6/user/details',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${token}`,
+          }),
+        })
+      );
+
+      expect(user.id).toBe(987654);
+      expect(user.username).toBe('coastal_mapper');
+      expect(user.changesetCount).toBe(425);
+      expect(user.unreadMessagesCount).toBe(3);
+      expect(user.totalMessagesCount).toBe(12);
+      expect(user.description).toBe('Local mapper in Newport');
+      expect(user.img).toBe('https://example.com/avatar.png');
+      expect(user.roles).toEqual(['moderator']);
+    });
+
+    it('correctly parses zero unread messages and missing message block', async () => {
+      const sampleZeroUnread = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <user id="100" display_name="mapper_zero" account_created="2021-01-01T00:00:00Z">
+    <messages>
+      <received count="10" unread="0"/>
+    </messages>
+  </user>
+</osm>`;
+      const mockFetch1 = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => sampleZeroUnread,
+      });
+
+      const user1 = await getUserDetails(token, baseUrl, mockFetch1);
+      expect(user1.unreadMessagesCount).toBe(0);
+      expect(user1.totalMessagesCount).toBe(10);
+
+      const sampleNoMessages = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <user id="200" display_name="mapper_legacy" account_created="2018-01-01T00:00:00Z">
+  </user>
+</osm>`;
+      const mockFetch2 = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => sampleNoMessages,
+      });
+
+      const user2 = await getUserDetails(token, baseUrl, mockFetch2);
+      expect(user2.unreadMessagesCount).toBeUndefined();
+      expect(user2.totalMessagesCount).toBeUndefined();
+    });
+
+    it('checkUserMessages returns unread and total count', async () => {
+      const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <user id="300" display_name="mapper_summary" account_created="2022-01-01T00:00:00Z">
+    <messages>
+      <received count="20" unread="5"/>
+    </messages>
+  </user>
+</osm>`;
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => sampleXml,
+      });
+
+      const summary = await checkUserMessages(token, baseUrl, mockFetch);
+      expect(summary.unreadCount).toBe(5);
+      expect(summary.totalCount).toBe(20);
+    });
+
+    it('throws error when user details endpoint fails', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: async () => 'Unauthorized',
+      });
+
+      await expect(getUserDetails(token, baseUrl, mockFetch)).rejects.toThrow('Failed to fetch OSM user details (HTTP 401)');
+    });
+  });
+
+  describe('Changeset Lifecycle', () => {
+    it('creates a new changeset and returns integer ID', async () => {
+      let sentBody = '';
+      const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        sentBody = String(init?.body || '');
+        return {
+          ok: true,
+          text: async () => '12345678',
+        };
+      });
+
+      const changesetId = await createChangeset(
+        token,
+        {
+          comment: 'Add phone number for Cafe',
+          source: 'https://cafe.example.com',
+          extraTags: { host: 'browsm' },
+        },
+        baseUrl,
+        mockFetch
+      );
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.openstreetmap.org/api/0.6/changeset/create',
+        expect.objectContaining({
+          method: 'PUT',
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'text/xml',
+          }),
+        })
+      );
+
+      expect(changesetId).toBe(12345678);
+      expect(sentBody).toContain('<tag k="comment" v="Add phone number for Cafe"/>');
+      expect(sentBody).toContain('<tag k="source" v="https://cafe.example.com"/>');
+      expect(sentBody).toContain('<tag k="host" v="browsm"/>');
+    });
+
+    it('closes an open changeset', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => '',
+      });
+
+      await closeChangeset(token, 12345678, baseUrl, mockFetch);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.openstreetmap.org/api/0.6/changeset/12345678/close',
+        expect.objectContaining({
+          method: 'PUT',
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${token}`,
+          }),
+        })
+      );
+    });
+
+    it('handles already-closed changesets (HTTP 409) without throwing', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        text: async () => 'The changeset 12345678 was closed at ...',
+      });
+
+      await expect(closeChangeset(token, 12345678, baseUrl, mockFetch)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('Node Operations', () => {
+    it('creates a new node using REST POST /nodes endpoint', async () => {
+      let sentBody = '';
+      const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        sentBody = String(init?.body || '');
+        return {
+          ok: true,
+          text: async () => '87654321',
+        };
+      });
+
+      const nodeId = await createNode(
+        token,
+        {
+          changesetId: 12345678,
+          lat: 41.4901,
+          lon: -71.3128,
+          tags: {
+            amenity: 'restaurant',
+            name: 'Harbor Grill',
+          },
+        },
+        baseUrl,
+        mockFetch
+      );
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.openstreetmap.org/api/0.6/nodes',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'text/xml',
+          }),
+        })
+      );
+
+      expect(nodeId).toBe(87654321);
+      expect(sentBody).toContain('<node changeset="12345678" lat="41.4901" lon="-71.3128">');
+      expect(sentBody).toContain('<tag k="amenity" v="restaurant"/>');
+      expect(sentBody).toContain('<tag k="name" v="Harbor Grill"/>');
+    });
+
+    it('falls back to legacy PUT /node/create if POST /nodes returns 404', async () => {
+      let callCount = 0;
+      const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        callCount++;
+        if (url.endsWith('/nodes') && init?.method === 'POST') {
+          return {
+            ok: false,
+            status: 404,
+            text: async () => 'Not Found',
+          };
+        }
+        if (url.endsWith('/node/create') && init?.method === 'PUT') {
+          return {
+            ok: true,
+            status: 200,
+            text: async () => '87654322',
+          };
+        }
+        return { ok: false, status: 500, text: async () => 'Error' };
+      });
+
+      const nodeId = await createNode(
+        token,
+        {
+          changesetId: 12345678,
+          lat: 41.4901,
+          lon: -71.3128,
+          tags: { amenity: 'pub' },
+        },
+        baseUrl,
+        mockFetch
+      );
+
+      expect(callCount).toBe(2);
+      expect(nodeId).toBe(87654322);
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.openstreetmap.org/api/0.6/nodes',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.openstreetmap.org/api/0.6/node/create',
+        expect.objectContaining({ method: 'PUT' })
+      );
+    });
+
+    it('updates an existing node and returns new version', async () => {
+      let sentBody = '';
+      const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        sentBody = String(init?.body || '');
+        return {
+          ok: true,
+          text: async () => '4',
+        };
+      });
+
+      const newVersion = await updateNode(
+        token,
+        {
+          changesetId: 12345678,
+          id: 555000,
+          lat: 41.4902,
+          lon: -71.3129,
+          version: 3,
+          tags: {
+            amenity: 'restaurant',
+            name: 'Harbor Grill Updated',
+            phone: '+1 401-555-9876',
+          },
+        },
+        baseUrl,
+        mockFetch
+      );
+
+      expect(newVersion).toBe(4);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.openstreetmap.org/api/0.6/node/555000',
+        expect.objectContaining({ method: 'PUT' })
+      );
+      expect(sentBody).toContain('<node id="555000" changeset="12345678" lat="41.4902" lon="-71.3129" version="3">');
+      expect(sentBody).toContain('<tag k="phone" v="+1 401-555-9876"/>');
+    });
+
+    it('throws OsmApiError with status 404 when updating non-existent node', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => 'Node 999999 could not be found',
+      });
+
+      const updatePromise = updateNode(
+        token,
+        {
+          changesetId: 12345678,
+          id: 999999,
+          lat: 41.4902,
+          lon: -71.3129,
+          version: 1,
+          tags: { name: 'Nonexistent' },
+        },
+        baseUrl,
+        mockFetch
+      );
+
+      await expect(updatePromise).rejects.toThrow(OsmApiError);
+      await expect(updatePromise).rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  describe('Way & Relation Operations', () => {
+    it('creates a new way using POST /ways with fallback', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => '654321',
+      });
+
+      const wayId = await createWay(
+        token,
+        {
+          changesetId: 12345678,
+          nodeRefs: [1, 2, 3, 1],
+          tags: { building: 'yes' },
+        },
+        baseUrl,
+        mockFetch
+      );
+
+      expect(wayId).toBe(654321);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.openstreetmap.org/api/0.6/ways',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    it('creates a new relation using POST /relations with fallback', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => '789101',
+      });
+
+      const relId = await createRelation(
+        token,
+        {
+          changesetId: 12345678,
+          members: [{ type: 'way', ref: 654321, role: 'outer' }],
+          tags: { type: 'multipolygon', building: 'yes' },
+        },
+        baseUrl,
+        mockFetch
+      );
+
+      expect(relId).toBe(789101);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.openstreetmap.org/api/0.6/relations',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    it('updates way tags and node references and returns new version', async () => {
+      let sentBody = '';
+      const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        sentBody = String(init?.body || '');
+        return {
+          ok: true,
+          text: async () => '2',
+        };
+      });
+
+      const newVersion = await updateWayTags(
+        token,
+        {
+          changesetId: 12345678,
+          id: 999111,
+          version: 1,
+          nodeRefs: [101, 102, 103, 101],
+          tags: {
+            building: 'retail',
+            shop: 'bakery',
+            name: 'Ocean Bakery',
+          },
+        },
+        baseUrl,
+        mockFetch
+      );
+
+      expect(newVersion).toBe(2);
+      expect(sentBody).toContain('<way id="999111" changeset="12345678" version="1">');
+      expect(sentBody).toContain('<nd ref="101"/>');
+      expect(sentBody).toContain('<nd ref="102"/>');
+      expect(sentBody).toContain('<tag k="shop" v="bakery"/>');
+    });
+
+    it('throws OsmApiError with status 404 when updating non-existent way', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => 'Way 888888 could not be found',
+      });
+
+      const updatePromise = updateWayTags(
+        token,
+        {
+          changesetId: 12345678,
+          id: 888888,
+          version: 1,
+          nodeRefs: [1, 2, 3, 1],
+          tags: { building: 'yes' },
+        },
+        baseUrl,
+        mockFetch
+      );
+
+      await expect(updatePromise).rejects.toThrow(OsmApiError);
+      await expect(updatePromise).rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  describe('Diff Uploads (uploadOsmChange)', () => {
+    it('uploads osmChange XML document to changeset upload endpoint', async () => {
+      const osc = `<osmChange version="0.6" generator="Browsm"><create><node changeset="12345678" lat="41.4" lon="-71.3"/></create></osmChange>`;
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => '<diffResult generator="OpenStreetMap server" version="0.6"><node old_id="-1" new_id="54321" new_version="1"/></diffResult>',
+      });
+
+      const result = await uploadOsmChange(token, 12345678, osc, baseUrl, mockFetch);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.openstreetmap.org/api/0.6/changeset/12345678/upload',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'text/xml',
+          }),
+          body: osc,
+        })
+      );
+      expect(result).toContain('<diffResult');
+    });
+  });
+
+  describe('fetchElement', () => {
+    it('fetches an OSM node and parses tags and coordinates', async () => {
+      const nodeXml = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <node id="123456" lat="41.4905" lon="-71.3120" version="5" changeset="888" user="osm_user" uid="12" timestamp="2026-01-10T12:00:00Z">
+    <tag k="amenity" v="cafe"/>
+    <tag k="name" v="Corner Cafe"/>
+  </node>
+</osm>`;
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => nodeXml,
+      });
+
+      const element = await fetchElement('node', 123456, baseUrl, mockFetch);
+
+      expect(element.id).toBe(123456);
+      expect(element.type).toBe('node');
+      expect(element.lat).toBe(41.4905);
+      expect(element.lon).toBe(-71.312);
+      expect(element.version).toBe(5);
+      expect(element.tags.amenity).toBe('cafe');
+      expect(element.tags.name).toBe('Corner Cafe');
+    });
+
+    it('fetches an OSM way and parses node references', async () => {
+      const wayXml = `<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+  <way id="234567" version="2" changeset="999">
+    <nd ref="1001"/>
+    <nd ref="1002"/>
+    <nd ref="1003"/>
+    <nd ref="1001"/>
+    <tag k="building" v="commercial"/>
+    <tag k="name" v="Harbor Plaza"/>
+  </way>
+</osm>`;
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => wayXml,
+      });
+
+      const element = await fetchElement('way', 234567, baseUrl, mockFetch);
+
+      expect(element.id).toBe(234567);
+      expect(element.type).toBe('way');
+      expect(element.version).toBe(2);
+      expect(element.nodeRefs).toEqual([1001, 1002, 1003, 1001]);
+      expect(element.tags.building).toBe('commercial');
+    });
+  });
+});
