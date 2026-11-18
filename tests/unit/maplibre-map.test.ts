@@ -204,7 +204,7 @@ describe('MapLibreMap.svelte & Map Types', () => {
 
   it('renders fallback content when MapLibre initialization throws or WebGL is unsupported', async () => {
     const { Map } = vi.mocked(await import('maplibre-gl'));
-    Map.mockImplementationOnce(function () {
+    (Map as any).mockImplementationOnce(function () {
       throw new Error('WebGL unsupported');
     });
 

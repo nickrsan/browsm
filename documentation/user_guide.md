@@ -25,9 +25,11 @@ When you visit local business websites (restaurants, stores, clinics, bakeries, 
 
 ## 3. Searching & Checking Addresses
 
-### Direct Search in Sidebar
-- Use the search bar at the top of the sidebar to search for any business name, full address, city, or coordinate pair.
-- Browsm checks the 24-hour local geocoding cache before querying Nominatim, ensuring instant responses.
+### Multi-Server Entity Verification
+- When querying addresses or business locations, Browsm uses Nominatim to resolve the general coordinate location.
+- Next, Browsm queries the active OpenStreetMap API server (whether that is Live Production, the OSM Dev Sandbox, or a custom instance) to confirm whether an entity exists at those coordinates on that specific server.
+- If an entity is verified on your active server, its true server-specific Node ID, version, and tags are selected for editing.
+- If no entity exists on your active server (such as when searching for a live POI while targeting the OSM Dev Sandbox), Browsm cleanly initializes the location as a **New POI Candidate**, allowing you to create the POI on the sandbox server without 404 entity mismatches.
 
 ### Address Lookup via Right-Click Menu
 1. Highlight any address or business location text on any webpage (e.g. `"100 Ocean Ave, Newport, RI"`).
@@ -111,8 +113,9 @@ Once you have reviewed and staged your tag edits:
    - **Changeset Comment**: Enter a brief summary of your survey (prefilled with your preferred default prefix and place name).
    - **Source**: Specify the data source (defaults to `website`).
 3. Click **"Confirm & Upload Changeset"**.
-4. Browsm opens the changeset, applies your edits, and closes the changeset automatically.
-5. On completion, direct links to the uploaded Changeset and modified Element on OpenStreetMap are displayed.
+4. Browsm opens the changeset, applies your edits using standard RESTful OSM API 0.6 operations (`POST /nodes` or `PUT /node/{id}`), and closes the changeset automatically.
+5. **Missing Entity Recovery**: If updating an existing element that does not exist on the active server instance (e.g. when testing with sandbox credentials against a live node ID), Browsm provides a 1-click option to switch to creating it as a brand new POI node at that location.
+6. On completion, direct links to the uploaded Changeset and modified Element on OpenStreetMap are displayed.
 
 ### Launching External Editors (iD, Rapid, JOSM)
 If you need to perform advanced geometric mapping, relation editing, or complex building modifications:

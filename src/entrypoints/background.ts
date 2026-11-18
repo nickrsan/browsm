@@ -6,9 +6,14 @@ import {
   findBestMatch,
   filterAndSortNearbyElements,
 } from '@/services/spatial-matcher';
-import { loadStoredSettings } from '@/services/endpoint-resolver';
+import {
+  loadStoredSettings,
+  resolveWriteEndpoint,
+  resolveReadEndpoint,
+} from '@/services/endpoint-resolver';
+import { fetchElement } from '@/services/osm-api';
 import { convertSchemaPlaceToOsmTags } from '@/services/tag-normalizer';
-import type { NominatimResult } from '@/types/osm';
+import type { NominatimResult, OsmElement, OsmElementType } from '@/types/osm';
 import type { SearchSessionState } from '@/types/diff';
 import type { SchemaOrgPlace } from '@/types/schema';
 
@@ -18,23 +23,24 @@ export default defineBackground(() => {
    */
   async function openSidebar(tabId?: number) {
     try {
-      if (import.meta.env.BROWSER === 'firefox') {
-        // @ts-ignore Firefox sidebar action API
-        if (browser.sidebarAction?.open) {
-          // @ts-ignore
-          await browser.sidebarAction.open();
-        }
-      } else if (tabId !== undefined) {
-        // @ts-ignore Chromium side panel API
-        if (browser.sidePanel?.setOptions && browser.sidePanel?.open) {
-          // @ts-ignore
+      // @ts-ignore Check Firefox sidebarAction API
+      if (typeof browser !== 'undefined' && 'sidebarAction' in browser && typeof browser.sidebarAction?.open === 'function') {
+        // @ts-ignore
+        await browser.sidebarAction.open();
+      // @ts-ignore Check Chromium sidePanel API
+      } else if (typeof browser !== 'undefined' && 'sidePanel' in browser && typeof browser.sidePanel?.open === 'function') {
+        if (tabId !== undefined && browser.sidePanel?.setOptions) {
           await browser.sidePanel.setOptions({
             tabId,
             path: 'sidebar.html',
             enabled: true,
           });
-          // @ts-ignore
+        }
+        if (tabId !== undefined) {
           await browser.sidePanel.open({ tabId });
+        } else {
+          // @ts-ignore
+          await browser.sidePanel.open();
         }
       }
     } catch (err) {
@@ -79,37 +85,67 @@ export default defineBackground(() => {
       return null;
     }
 
-    // Step 2: Fetch all OSM elements in a micro-bounding box based on user radius setting
+    // Step 2: Resolve the target OSM API endpoint (e.g. Dev API, Prod, or Custom)
     const settings = await loadStoredSettings();
     const searchRadius = settings.nearbySearchRadius ?? 50;
+    const writeEndpoint = await resolveWriteEndpoint(settings);
+    const readEndpoint = await resolveReadEndpoint(settings);
+    const targetApiUrl = writeEndpoint.config.apiBaseUrl || readEndpoint.config.apiBaseUrl;
+    const isProdApi =
+      Boolean(targetApiUrl) &&
+      targetApiUrl.includes('api.openstreetmap.org') &&
+      !targetApiUrl.includes('dev.openstreetmap.org');
+
+    // Step 3: Fetch all OSM elements from the active API server in a micro-bounding box
     const bbox = calculateBboxAroundCoords(parsedLat, parsedLon, searchRadius);
-    const rawElements = await fetchOsmElementsInBbox(bbox);
+    const rawElements = await fetchOsmElementsInBbox(bbox, targetApiUrl);
     const nearbyElements = filterAndSortNearbyElements(rawElements, parsedLat, parsedLon, searchRadius);
 
-    // Step 3: Score best matching element
+    // Step 4: Score best matching element from the active API server
     const matchResult = findBestMatch(
       {
         name: firstResult.name || cleanQuery,
         lat: parsedLat,
         lon: parsedLon,
-        osmId: firstResult.osm_id,
-        osmType: firstResult.osm_type as string,
+        osmId: isProdApi ? firstResult.osm_id : undefined,
+        osmType: isProdApi ? (firstResult.osm_type as string) : undefined,
       },
       nearbyElements
     );
 
-    const osmIdString = matchResult.matchedElement ? String(matchResult.matchedElement.id) : String(firstResult.osm_id);
-    const osmTypeString = matchResult.matchedElement ? matchResult.matchedElement.type : (firstResult.osm_type as string);
-    const matchedElementId = matchResult.matchedElement
-      ? `${matchResult.matchedElement.type}/${matchResult.matchedElement.id}`
+    let matchedElement: OsmElement | undefined = matchResult.matchedElement;
+
+    // If on production and not matched from bbox, verify whether firstResult.osm_id actually exists on the target API
+    if (!matchedElement && isProdApi && firstResult.osm_id && firstResult.osm_type) {
+      const parsedId = parseInt(String(firstResult.osm_id), 10);
+      const parsedType = String(firstResult.osm_type).toLowerCase() as OsmElementType;
+      if (parsedId > 0 && ['node', 'way', 'relation'].includes(parsedType)) {
+        try {
+          const verifiedElement = await fetchElement(parsedType, parsedId, targetApiUrl);
+          if (verifiedElement) {
+            matchedElement = verifiedElement;
+            if (!nearbyElements.some((e) => e.type === verifiedElement.type && e.id === verifiedElement.id)) {
+              nearbyElements.unshift(verifiedElement);
+            }
+          }
+        } catch {
+          // Element doesn't exist on this API server or was deleted
+        }
+      }
+    }
+
+    const osmIdString = matchedElement ? String(matchedElement.id) : '';
+    const osmTypeString = matchedElement ? matchedElement.type : '';
+    const matchedElementId = matchedElement
+      ? `${matchedElement.type}/${matchedElement.id}`
       : undefined;
 
-    // Step 4: Persist session and notify UI
+    // Step 5: Persist session and notify UI with verified API data
     const searchSession: SearchSessionState = {
       query: cleanQuery,
       source,
       coordinates: { lat: parsedLat, lon: parsedLon },
-      status: matchResult.matchStatus === 'no_match' ? 'no_match' : 'matched',
+      status: matchedElement ? 'matched' : 'no_match',
       matchedElementId,
       nearbyElements,
     };
@@ -147,6 +183,7 @@ export default defineBackground(() => {
       geocode: firstResult,
       matchResult,
       nearbyElements,
+      matchedElement,
     };
   }
 

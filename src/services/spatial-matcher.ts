@@ -236,12 +236,16 @@ export function parseOsmBboxXml(xmlString: string): OsmElement[] {
 
     const ndNodes = way.querySelectorAll('nd');
     const geometry: LatLon[] = [];
+    const nodeRefs: number[] = [];
 
     for (const nd of ndNodes) {
       const ref = parseInt(nd.getAttribute('ref') || '0', 10);
-      const coord = nodeMap.get(ref);
-      if (coord) {
-        geometry.push(coord);
+      if (ref) {
+        nodeRefs.push(ref);
+        const coord = nodeMap.get(ref);
+        if (coord) {
+          geometry.push(coord);
+        }
       }
     }
 
@@ -280,6 +284,7 @@ export function parseOsmBboxXml(xmlString: string): OsmElement[] {
           user,
           tags,
           geometry,
+          nodeRefs: nodeRefs.length > 0 ? nodeRefs : undefined,
           isStructure: hasStructureTag,
         });
       }

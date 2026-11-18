@@ -97,12 +97,17 @@ browsm/
   - Validates whether an OSM element contains descriptive physical/POI tags, excluding elements with no tags or with only internal metadata keys (`created_by`, `source`, `source:*`, `tiger:*`, `gnis:*`, `attribution`).
 - `filterAndSortNearbyElements(elements: OsmElement[], centerLat?: number, centerLon?: number, maxDistanceMeters?: number): OsmElement[]`
   - Filters out untagged OSM elements and items beyond the configured search radius (defaulting to 50 meters), prioritizing tagged point nodes before area ways and relations, secondary-sorted by distance.
-- `fetchOsmElementsInBbox(bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number }): Promise<OsmElement[]>`
-  - Queries `https://api.openstreetmap.org/api/0.6/map?bbox=...` and parses both standalone `<node>` elements and `<way>` building structures with geometry centroids.
+- `fetchOsmElementsInBbox(bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number }, baseUrl?: string, customFetch?: typeof fetch): Promise<OsmElement[]>`
+  - Queries `/api/0.6/map?bbox=...` on the active configured API base URL (supporting OpenStreetMap Production, OSM Dev Sandbox, OpenHistoricalMap, or Custom endpoints) and parses both standalone `<node>` elements and `<way>` building structures with geometry centroids.
 - `findBestMatch(target: { name?: string; phone?: string; website?: string; lat?: number; lon?: number; osmId?: number | string; osmType?: string }, candidates: OsmElement[]): SpatialMatchResult`
   - Scores candidates using direct OSM ID matching, Sørensen-Dice name similarity across multiple name tags (`name`, `name:en`, `alt_name`, `official_name`, `brand`, `operator`), coordinate distance, phone, website, and category tags.
 - `generateTagDiff(sourceTags: Record<string, string>, targetElement?: OsmElement, sourceOrigin?: string, sourceNote?: string): TagDiffItem[]`
   - Generates itemized diffs between page metadata tags and live OSM element tags, categorizes cosmetic formatting discrepancies as `minor_difference` (ignored by default with OSM value preserved), attaches provenance metadata, and applies 3-tier sorting (staged changes top, minor/ignored differences middle, identical tags bottom).
+
+### Multi-Server Nominatim & Target API Resolution Workflow
+- **Initial Geocoding**: Nominatim (`nominatim.openstreetmap.org`) is queried for initial geographic coordinates (`lat`, `lon`), bounding box, and place name query.
+- **Active API Confirmation**: Because Nominatim indexes the production database, any production `osm_id` returned by Nominatim is not assumed to exist when targeting the Dev API or custom servers. The background worker queries `GET /api/0.6/map?bbox=...` against the active configured API endpoint (e.g., `https://master.apis.dev.openstreetmap.org/api/0.6`).
+- **Entity Verification**: If a matching entity exists on the active server, its true server-specific Node ID, version, and tags are loaded. If no entity exists on the active server, the POI is cleanly presented as a new candidate (`selectedElement = null`), ensuring that subsequent changesets create a new node on that server rather than attempting to update a non-existent production ID.
 
 ### OAuth 2.0 PKCE Client (`src/services/osm-auth.ts`)
 - `getAuthStorageKey(endpointId?: string): string`
@@ -153,7 +158,7 @@ browsm/
   - `resetToDefaults()`: Restores factory configuration.
 
 ### OSM API 0.6 Client (`src/services/osm-api.ts`)
-- `OsmApiError`: Specialized Error class containing HTTP `status` code metadata for rate-limiting and authentication error handling.
+- `OsmApiError`: Specialized Error class containing HTTP `status` code metadata for rate-limiting, missing entity (404), version conflict (409), and authentication error handling.
 - `getUserDetails(accessToken: string, baseUrl?: string, customFetch?: typeof fetch): Promise<OsmUserDetails>`
   - Queries `GET /api/0.6/user/details` and parses user profile, changeset count, roles, and message statistics (`unreadMessagesCount`, `totalMessagesCount`).
 - `checkUserMessages(accessToken: string, baseUrl?: string, customFetch?: typeof fetch): Promise<{ unreadCount: number; totalCount: number }>`
@@ -163,13 +168,19 @@ browsm/
 - `closeChangeset(accessToken: string, changesetId: number, baseUrl?: string): Promise<void>`
   - Closes an active changeset.
 - `createNode(accessToken: string, params: CreateNodeParams, baseUrl?: string): Promise<number>`
-  - Creates a new POI node and returns the created node ID.
+  - Creates a new POI node using standard RESTful `POST /api/0.6/nodes` with automatic fallback to legacy `PUT /api/0.6/node/create` and returns the created node ID.
+- `createWay(accessToken: string, params: { changesetId: number; nodeRefs: number[]; tags: OsmTags }, baseUrl?: string): Promise<number>`
+  - Creates a new way structure using standard `POST /api/0.6/ways` with fallback to `PUT /api/0.6/way/create`.
+- `createRelation(accessToken: string, params: { changesetId: number; members: Array<{ type: 'node' | 'way' | 'relation'; ref: number; role?: string }>; tags: OsmTags }, baseUrl?: string): Promise<number>`
+  - Creates a new relation structure using standard `POST /api/0.6/relations` with fallback to `PUT /api/0.6/relation/create`.
+- `uploadOsmChange(accessToken: string, changesetId: number, osmChangeXml: string, baseUrl?: string): Promise<string>`
+  - Uploads atomic diff changesets via `POST /api/0.6/changeset/{id}/upload`.
 - `updateNode(accessToken: string, params: UpdateNodeParams, baseUrl?: string): Promise<number>`
-  - Updates an existing node and returns the incremented version.
+  - Updates an existing node via `PUT /api/0.6/node/{id}` and returns the incremented version. Throws `OsmApiError` with status 404 if the node ID is not found on the server.
 - `updateWayTags(accessToken: string, params: UpdateWayParams, baseUrl?: string): Promise<number>`
-  - Updates tags on an existing building structure/way.
+  - Updates tags on an existing building structure/way via `PUT /api/0.6/way/{id}`, preserving ordered `nodeRefs`. Throws `OsmApiError` with status 404 if the way is not found.
 - `fetchElement(type: OsmElementType, id: number, baseUrl?: string): Promise<OsmElement>`
-  - Fetches XML for any node, way, or relation and parses structured `OsmElement`.
+  - Fetches XML for any node, way, or relation and parses structured `OsmElement` (including `nodeRefs` for ways).
 
 ### Map Notes Service (`src/services/osm-notes.ts`)
 - `createOsmNote(params: CreateNoteParams, accessToken?: string, baseUrl?: string): Promise<OsmNote>`
@@ -182,6 +193,12 @@ browsm/
 ### Map Component (`src/components/MapLibreMap.svelte`)
 - Encapsulates MapLibre GL JS with OpenFreeMap vector styles (`liberty`, `bright`, `positron`, `dark`) and PMTiles protocol registration (`pmtiles.Protocol`).
 - Configured with `setWorkerUrl(maplibreWorkerUrl)` importing `maplibre-gl/dist/maplibre-gl-worker.mjs?url` to bundle and resolve web worker scripts locally within WebExtension environments across Firefox and Chromium, preventing CSP and worker loading failures.
+
+### Browser Platform Manifests & Sidebar Architecture (`src/config/manifest.ts`)
+- `generateManifest(env: ManifestEnv)` generates target-specific WebExtension manifests dynamically:
+  - **Firefox**: Generates `sidebar_action` (`default_panel: "sidebar.html"`, `default_title: "Browsm"`) and excludes the Chromium-only `side_panel` key and `sidePanel` permission, preventing manifest processing warnings in Firefox.
+  - **Chromium**: Generates `side_panel` (`default_path: "sidebar.html"`) and includes the `sidePanel` permission.
+- Unified sidebar activation handlers in `src/entrypoints/background.ts` and `src/entrypoints/popup/App.svelte` prioritize `browser.sidebarAction.open()`, fall back to `browser.sidePanel.open()`, and provide resilient `browser.tabs.create()` fallback navigation.
 
 ### Reactive Authentication Store (`src/stores/auth.svelte.ts`)
 - `authStore`: Svelte 5 runes-powered singleton class exposing:

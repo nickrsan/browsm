@@ -145,7 +145,7 @@ function getInitScript(): () => void {
                   nearbyElements: session.nearbyElements,
                 },
               });
-              messageListeners.forEach((l) => {
+              messageListeners.forEach((l: any) => {
                 try {
                   l(
                     {

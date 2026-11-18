@@ -1,7 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolveApiEndpoint } from '@/services/endpoint-resolver';
-  import { createChangeset, closeChangeset, createNode, updateNode, updateWayTags } from '@/services/osm-api';
+  import {
+    createChangeset,
+    closeChangeset,
+    createNode,
+    updateNode,
+    updateWayTags,
+    fetchElement,
+    OsmApiError,
+  } from '@/services/osm-api';
   import { authStore } from '@/stores/auth.svelte';
   import { settingsStore } from '@/stores/settings.svelte';
   import type { OsmElement } from '@/types/osm';
@@ -32,6 +40,8 @@
   let isSubmitting = $state<boolean>(false);
   let submitProgress = $state<string>('');
   let errorMessage = $state<string | null>(null);
+  let notFoundError = $state<boolean>(false);
+  let createAsNewNode = $state<boolean>(false);
   let createdChangesetId = $state<number | null>(null);
   let resultElementId = $state<number | null>(null);
 
@@ -91,6 +101,8 @@
       }
 
       errorMessage = null;
+      notFoundError = false;
+      createAsNewNode = false;
       createdChangesetId = null;
       resultElementId = null;
       isSubmitting = false;
@@ -106,6 +118,7 @@
 
     isSubmitting = true;
     errorMessage = null;
+    notFoundError = false;
 
     try {
       const endpoint = resolvedEndpoint || (await resolveApiEndpoint('write'));
@@ -136,7 +149,7 @@
       let elementId: number;
       try {
         // 2. Perform Element Create or Update
-        if (targetElement) {
+        if (targetElement && !createAsNewNode) {
           submitProgress = `Updating ${targetElement.type} #${targetElement.id}...`;
           elementId = targetElement.id;
 
@@ -154,22 +167,39 @@
               baseUrl
             );
           } else if (targetElement.type === 'way') {
+            let nodeRefs = targetElement.nodeRefs || [];
+            let wayVersion = targetElement.version;
+
+            if (nodeRefs.length === 0) {
+              try {
+                const freshWay = await fetchElement('way', targetElement.id, baseUrl);
+                if (freshWay.nodeRefs && freshWay.nodeRefs.length > 0) {
+                  nodeRefs = freshWay.nodeRefs;
+                  wayVersion = freshWay.version;
+                }
+              } catch (fetchErr) {
+                console.warn('Could not fetch latest way node references:', fetchErr);
+              }
+            }
+
             await updateWayTags(
               token,
               {
                 id: targetElement.id,
-                version: targetElement.version,
+                version: wayVersion,
                 changesetId,
                 tags: cleanStagedTags,
-                nodeRefs: [], // Keep existing geometry refs
+                nodeRefs,
               },
               baseUrl
             );
+          } else {
+            throw new Error(`Unsupported element type: ${targetElement.type}`);
           }
         } else {
           submitProgress = 'Creating new POI node...';
-          const lat = coordinates?.lat ?? 0;
-          const lon = coordinates?.lon ?? 0;
+          const lat = coordinates?.lat ?? targetElement?.lat ?? 0;
+          const lon = coordinates?.lon ?? targetElement?.lon ?? 0;
           elementId = await createNode(
             token,
             {
@@ -200,7 +230,17 @@
       }
     } catch (err) {
       console.error('Failed to commit changeset:', err);
-      errorMessage = (err as Error).message || 'Failed to upload changeset to OpenStreetMap.';
+      const is404 =
+        (err instanceof OsmApiError && err.status === 404) ||
+        (err as Error).message?.includes('404') ||
+        (err as Error).message?.includes('not found');
+
+      if (is404 && targetElement && !createAsNewNode) {
+        notFoundError = true;
+        errorMessage = `Target ${targetElement.type} #${targetElement.id} was not found on this OSM server. You can choose to create it as a new POI node instead.`;
+      } else {
+        errorMessage = (err as Error).message || 'Failed to upload changeset to OpenStreetMap.';
+      }
     } finally {
       isSubmitting = false;
     }
@@ -310,7 +350,7 @@
 
           <!-- Operation Target Summary -->
           <div class="summary-card">
-            {#if targetElement}
+            {#if targetElement && !createAsNewNode}
               <div class="summary-line">
                 <span class="summary-label">Target Element:</span>
                 <span class="summary-val">
@@ -322,7 +362,7 @@
               <div class="summary-line">
                 <span class="summary-label">Target Action:</span>
                 <span class="summary-val">
-                  <strong>Create New POI Node</strong> at ({coordinates?.lat?.toFixed(5)}, {coordinates?.lon?.toFixed(5)})
+                  <strong>Create New POI Node</strong> at ({(coordinates?.lat ?? targetElement?.lat ?? 0).toFixed(5)}, {(coordinates?.lon ?? targetElement?.lon ?? 0).toFixed(5)})
                   ({Object.keys(cleanStagedTags).length} tags)
                 </span>
               </div>
@@ -394,7 +434,22 @@
           <!-- Error Alert -->
           {#if errorMessage}
             <div class="alert alert-error" role="alert">
-              ❌ {errorMessage}
+              <div>❌ {errorMessage}</div>
+              {#if notFoundError && targetElement && !createAsNewNode}
+                <div class="fallback-action-container">
+                  <button
+                    type="button"
+                    class="btn-fallback-new-node"
+                    onclick={() => {
+                      createAsNewNode = true;
+                      notFoundError = false;
+                      errorMessage = null;
+                    }}
+                  >
+                    ➕ Switch to Creating as a New POI Node
+                  </button>
+                </div>
+              {/if}
             </div>
           {/if}
 
@@ -795,6 +850,29 @@
     border: 1px solid #fecaca;
     border-radius: 4px;
     font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .fallback-action-container {
+    margin-top: 4px;
+  }
+
+  .btn-fallback-new-node {
+    background: #b91c1c;
+    color: #ffffff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .btn-fallback-new-node:hover {
+    background: #991b1b;
   }
 
   @media (prefers-color-scheme: dark) {

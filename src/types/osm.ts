@@ -40,6 +40,10 @@ export interface OsmElement {
    */
   geometry?: LatLon[];
   /**
+   * For ways, ordered list of referenced node IDs defining the way geometry.
+   */
+  nodeRefs?: number[];
+  /**
    * Indicates whether this entity represents a building or structure containing POI tags.
    */
   isStructure?: boolean;

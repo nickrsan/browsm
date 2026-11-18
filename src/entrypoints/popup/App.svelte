@@ -35,22 +35,39 @@
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const activeTabId = tabs[0]?.id;
 
-      if (import.meta.env.BROWSER === 'firefox') {
+      // @ts-ignore Check Firefox sidebarAction API
+      if (typeof browser !== 'undefined' && 'sidebarAction' in browser && typeof browser.sidebarAction?.open === 'function') {
         // @ts-ignore
-        if (browser.sidebarAction?.open) {
-          // @ts-ignore
-          await browser.sidebarAction.open();
+        await browser.sidebarAction.open();
+      // @ts-ignore Check Chromium sidePanel API
+      } else if (typeof browser !== 'undefined' && 'sidePanel' in browser && typeof browser.sidePanel?.open === 'function') {
+        if (activeTabId !== undefined && browser.sidePanel?.setOptions) {
+          await browser.sidePanel.setOptions({
+            tabId: activeTabId,
+            path: 'sidebar.html',
+            enabled: true,
+          });
         }
-      } else if (import.meta.env.BROWSER === 'chrome' && activeTabId !== undefined) {
-        // @ts-ignore
-        if (browser.sidePanel?.open) {
-          // @ts-ignore
+        if (activeTabId !== undefined) {
           await browser.sidePanel.open({ tabId: activeTabId });
+        } else {
+          // @ts-ignore
+          await browser.sidePanel.open();
         }
+      } else if (typeof browser !== 'undefined' && browser.tabs?.create) {
+        await browser.tabs.create({ url: browser.runtime.getURL('/sidebar.html') });
       }
       window.close();
     } catch (err) {
       console.error('Failed to open sidebar from popup:', err);
+      try {
+        if (typeof browser !== 'undefined' && browser.tabs?.create) {
+          await browser.tabs.create({ url: browser.runtime.getURL('/sidebar.html') });
+        }
+        window.close();
+      } catch (fallbackErr) {
+        console.error('Failed fallback tab navigation for sidebar:', fallbackErr);
+      }
     }
   }
 

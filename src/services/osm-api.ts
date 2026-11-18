@@ -239,6 +239,7 @@ export async function closeChangeset(
 
 /**
  * Creates a new OpenStreetMap Node within an open changeset.
+ * Uses standard REST endpoint POST /api/0.6/nodes with fallback to legacy PUT /api/0.6/node/create.
  * Returns the newly created Node ID.
  */
 export async function createNode(
@@ -247,7 +248,9 @@ export async function createNode(
   baseUrl: string = DEFAULT_API_BASE_URL,
   customFetch: typeof fetch = fetch
 ): Promise<number> {
-  const url = `${baseUrl.replace(/\/+$/, '')}/node/create`;
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+  const primaryUrl = `${cleanBaseUrl}/nodes`;
+  const legacyUrl = `${cleanBaseUrl}/node/create`;
 
   const tagsXml = serializeTagsXml(params.tags);
   const payloadXml = `<osm>
@@ -256,8 +259,9 @@ ${tagsXml}
   </node>
 </osm>`;
 
-  const response = await customFetch(url, {
-    method: 'PUT',
+  // Try standard REST POST /nodes first
+  let response = await customFetch(primaryUrl, {
+    method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'text/xml',
@@ -265,9 +269,21 @@ ${tagsXml}
     body: payloadXml,
   });
 
+  // If POST /nodes returns 404 or 405 (e.g. legacy or custom OSM API server), fall back to PUT /node/create
+  if (!response.ok && (response.status === 404 || response.status === 405)) {
+    response = await customFetch(legacyUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'text/xml',
+      },
+      body: payloadXml,
+    });
+  }
+
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Failed to create OSM node (HTTP ${response.status}): ${errText}`);
+    throw new OsmApiError(`Failed to create OSM node (HTTP ${response.status}): ${errText}`, response.status);
   }
 
   const nodeIdStr = (await response.text()).trim();
@@ -278,6 +294,165 @@ ${tagsXml}
   }
 
   return nodeId;
+}
+
+/**
+ * Creates a new OpenStreetMap Way within an open changeset.
+ * Uses standard REST endpoint POST /api/0.6/ways with fallback to legacy PUT /api/0.6/way/create.
+ * Returns the newly created Way ID.
+ */
+export async function createWay(
+  accessToken: string,
+  params: {
+    changesetId: number;
+    nodeRefs: number[];
+    tags: OsmTags;
+  },
+  baseUrl: string = DEFAULT_API_BASE_URL,
+  customFetch: typeof fetch = fetch
+): Promise<number> {
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+  const primaryUrl = `${cleanBaseUrl}/ways`;
+  const legacyUrl = `${cleanBaseUrl}/way/create`;
+
+  const ndsXml = params.nodeRefs.map((ref) => `    <nd ref="${ref}"/>`).join('\n');
+  const tagsXml = serializeTagsXml(params.tags);
+  const payloadXml = `<osm>
+  <way changeset="${params.changesetId}">
+${ndsXml}
+${tagsXml}
+  </way>
+</osm>`;
+
+  let response = await customFetch(primaryUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'text/xml',
+    },
+    body: payloadXml,
+  });
+
+  if (!response.ok && (response.status === 404 || response.status === 405)) {
+    response = await customFetch(legacyUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'text/xml',
+      },
+      body: payloadXml,
+    });
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new OsmApiError(`Failed to create OSM way (HTTP ${response.status}): ${errText}`, response.status);
+  }
+
+  const wayIdStr = (await response.text()).trim();
+  const wayId = parseInt(wayIdStr, 10);
+
+  if (Number.isNaN(wayId) || wayId <= 0) {
+    throw new Error(`Unexpected way ID returned by OSM API: "${wayIdStr}"`);
+  }
+
+  return wayId;
+}
+
+/**
+ * Creates a new OpenStreetMap Relation within an open changeset.
+ * Uses standard REST endpoint POST /api/0.6/relations with fallback to legacy PUT /api/0.6/relation/create.
+ * Returns the newly created Relation ID.
+ */
+export async function createRelation(
+  accessToken: string,
+  params: {
+    changesetId: number;
+    members: Array<{ type: 'node' | 'way' | 'relation'; ref: number; role?: string }>;
+    tags: OsmTags;
+  },
+  baseUrl: string = DEFAULT_API_BASE_URL,
+  customFetch: typeof fetch = fetch
+): Promise<number> {
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+  const primaryUrl = `${cleanBaseUrl}/relations`;
+  const legacyUrl = `${cleanBaseUrl}/relation/create`;
+
+  const membersXml = params.members
+    .map((m) => `    <member type="${m.type}" ref="${m.ref}" role="${escapeXml(m.role || '')}"/>`)
+    .join('\n');
+  const tagsXml = serializeTagsXml(params.tags);
+  const payloadXml = `<osm>
+  <relation changeset="${params.changesetId}">
+${membersXml}
+${tagsXml}
+  </relation>
+</osm>`;
+
+  let response = await customFetch(primaryUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'text/xml',
+    },
+    body: payloadXml,
+  });
+
+  if (!response.ok && (response.status === 404 || response.status === 405)) {
+    response = await customFetch(legacyUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'text/xml',
+      },
+      body: payloadXml,
+    });
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new OsmApiError(`Failed to create OSM relation (HTTP ${response.status}): ${errText}`, response.status);
+  }
+
+  const relIdStr = (await response.text()).trim();
+  const relId = parseInt(relIdStr, 10);
+
+  if (Number.isNaN(relId) || relId <= 0) {
+    throw new Error(`Unexpected relation ID returned by OSM API: "${relIdStr}"`);
+  }
+
+  return relId;
+}
+
+/**
+ * Uploads an osmChange XML document to an open changeset.
+ * Endpoint: POST /api/0.6/changeset/{id}/upload
+ * Guarantees atomic transaction execution for multiple created/modified/deleted elements.
+ */
+export async function uploadOsmChange(
+  accessToken: string,
+  changesetId: number,
+  osmChangeXml: string,
+  baseUrl: string = DEFAULT_API_BASE_URL,
+  customFetch: typeof fetch = fetch
+): Promise<string> {
+  const url = `${baseUrl.replace(/\/+$/, '')}/changeset/${changesetId}/upload`;
+
+  const response = await customFetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'text/xml',
+    },
+    body: osmChangeXml,
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new OsmApiError(`Failed to upload diff to changeset #${changesetId} (HTTP ${response.status}): ${errText}`, response.status);
+  }
+
+  return await response.text();
 }
 
 /**
@@ -310,7 +485,13 @@ ${tagsXml}
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Failed to update OSM node #${params.id} (HTTP ${response.status}): ${errText}`);
+    if (response.status === 404) {
+      throw new OsmApiError(
+        `Node #${params.id} was not found on OSM server (${baseUrl}). It may have been deleted or only exists on another server preset.`,
+        404
+      );
+    }
+    throw new OsmApiError(`Failed to update OSM node #${params.id} (HTTP ${response.status}): ${errText}`, response.status);
   }
 
   const versionStr = (await response.text()).trim();
@@ -355,7 +536,13 @@ ${tagsXml}
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Failed to update OSM way #${params.id} (HTTP ${response.status}): ${errText}`);
+    if (response.status === 404) {
+      throw new OsmApiError(
+        `Way #${params.id} was not found on OSM server (${baseUrl}). It may have been deleted or only exists on another server preset.`,
+        404
+      );
+    }
+    throw new OsmApiError(`Failed to update OSM way #${params.id} (HTTP ${response.status}): ${errText}`, response.status);
   }
 
   const versionStr = (await response.text()).trim();
@@ -417,6 +604,15 @@ export async function fetchElement(
     }
   });
 
+  const nodeRefs: number[] = [];
+  if (type === 'way') {
+    const ndNodes = element.querySelectorAll('nd');
+    ndNodes.forEach((nd) => {
+      const ref = parseInt(nd.getAttribute('ref') || '0', 10);
+      if (ref) nodeRefs.push(ref);
+    });
+  }
+
   return {
     id,
     type,
@@ -428,5 +624,6 @@ export async function fetchElement(
     uid,
     timestamp,
     tags,
+    nodeRefs: nodeRefs.length > 0 ? nodeRefs : undefined,
   };
 }
