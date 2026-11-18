@@ -11,6 +11,28 @@
 - [] Initial accessibility checks
 - [] Issue template?
 
+
+We don't have any way to add a location when making a new POI, do we?
+Make it not stage anything that overwrites tags by default
+Make it move staged tags to a new section to be extra clear. Call them something else
+
+DIST release on commit to main
+Dist build for preview only on PR
+Linter in PR
+Branch protection
+Check todo
+Copy instructions into agents.md
+Add instruction to do a code review check for quality and flag potential issues for review. Can we do this in the action with GitHub?
+Add welcome page or information to help people get started on first install
+Add PR template with AI guidelines
+Add AI guidelines
+Update Readme
+
+-Nick
+
+
+
+
 # Features
 - [] Cache requests to Nominatim for a day
   - Use Session Storage `https://wxt.dev/storage.html#basic-usage`
