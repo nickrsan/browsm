@@ -11,8 +11,7 @@ in-extension editor for location and tags.
 # Goals
 1. Facilitate checking and adding missing POIs to OpenStreetMap
 2. Aid in keeping existing POI data fresh by alerting the user of mismatches
-3. Allow the user to ein-extension editor for location and tags.
-dit without leaving the business' webpage so that data can be most easily transferred.
+3. Allow the user to edit in-extension without leaving the business' webpage so that data can be most easily transferred.
 4. Generally to aid frequent OpenStreetMap contributors in tasks related to editing and improving the map.
 
 # Demo
